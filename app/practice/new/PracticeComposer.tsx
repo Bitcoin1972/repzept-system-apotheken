@@ -99,6 +99,19 @@ export function PracticeComposer() {
     };
   }, [manualManufacturer, manualPzn, parsed, selectedProduct]);
 
+  const previewFieldCount = useMemo(() => {
+    return [
+      preview.patientReference,
+      preview.medicationName,
+      preview.productName,
+      preview.manufacturer,
+      preview.dosage,
+      preview.form,
+      preview.pzn,
+      preview.quantity,
+    ].filter(Boolean).length;
+  }, [preview]);
+
   useEffect(() => {
     setSpeechAvailable(Boolean(window.SpeechRecognition || window.webkitSpeechRecognition));
 
@@ -210,6 +223,10 @@ export function PracticeComposer() {
     }
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
     <div className="stack">
       <section className="hero-card">
@@ -221,7 +238,55 @@ export function PracticeComposer() {
         </p>
       </section>
 
-      <section className="panel stack">
+      <section className="dashboard-stat-grid">
+        <article className="dashboard-stat-card">
+          <p className="dashboard-stat-kicker">Modus</p>
+          <strong>{mode === "prescription" ? "Rezeptmodus" : "Standard"}</strong>
+          <span>{mode === "prescription" ? "Strukturierter Entwurf aktiv" : "Freitext ohne Rezeptlogik"}</span>
+        </article>
+        <article className="dashboard-stat-card">
+          <p className="dashboard-stat-kicker">Rezeptfelder</p>
+          <strong>{previewFieldCount}/8</strong>
+          <span>Live aus Diktat und Produktauswahl befuellt</span>
+        </article>
+        <article className="dashboard-stat-card">
+          <p className="dashboard-stat-kicker">Produktstatus</p>
+          <strong>{selectedProduct ? "Ausgewaehlt" : "Offen"}</strong>
+          <span>{selectedProduct ? selectedProduct.productName : "Noch kein Demo-Produkt gesetzt"}</span>
+        </article>
+        <article className="dashboard-stat-card">
+          <p className="dashboard-stat-kicker">Druckansicht</p>
+          <strong>{text.trim() ? "Bereit" : "Warte"}</strong>
+          <span>{text.trim() ? "Vorschau kann direkt gedruckt werden" : "Bitte zuerst Rezepttext eingeben"}</span>
+        </article>
+      </section>
+
+      <section className="panel stack dashboard-focus-panel">
+        <div className="row">
+          <div>
+            <p className="hero-kicker">Rezeptstatus</p>
+            <h2 className="dashboard-focus-title">Wie belastbar ist der aktuelle Rezeptentwurf?</h2>
+          </div>
+          <span className="dashboard-health-pill">
+            {previewFieldCount >= 6 ? "Stabil" : previewFieldCount >= 3 ? "In Arbeit" : "Rohentwurf"}
+          </span>
+        </div>
+        <div className="dashboard-focus-score">
+          <strong>{Math.round((previewFieldCount / 8) * 100)}/100</strong>
+          <p>
+            {previewFieldCount >= 6
+              ? "Der Entwurf ist weitgehend befuellt und bereit fuer Sichtpruefung oder Ausdruck."
+              : "Es fehlen noch strukturierte Angaben fuer einen vollstaendigen Rezeptentwurf."}
+          </p>
+        </div>
+        <ul className="dashboard-focus-list">
+          <li>Produktsuche kann Hersteller, Form und PZN direkt in den Entwurf uebernehmen.</li>
+          <li>Die Live-Vorschau reagiert sofort auf Diktat, Freitext und manuelle Korrekturen.</li>
+          <li>Vor Freigabe oder Ausdruck sollte die fachliche Plausibilitaet geprueft werden.</li>
+        </ul>
+      </section>
+
+      <section className="panel stack dashboard-input-panel">
         <div className="mode-switch" role="tablist" aria-label="Modus">
           <button
             type="button"
@@ -291,7 +356,7 @@ export function PracticeComposer() {
       </section>
 
       {mode === "prescription" ? (
-        <section className="panel stack">
+        <section className="panel stack dashboard-product-panel">
           <div className="row">
             <h2>Strukturierte Produktauswahl</h2>
             <span className="status-pill">Demo-Arzneiliste</span>
@@ -410,7 +475,7 @@ export function PracticeComposer() {
       ) : null}
 
       {mode === "prescription" ? (
-        <section className="panel stack">
+        <section className="panel stack dashboard-data-panel">
           <div className="row">
             <h2>Rezeptentwurf</h2>
             <span className="status-pill">Live geparst</span>
@@ -449,6 +514,110 @@ export function PracticeComposer() {
               <dd>{preview.productName || "-"}</dd>
             </div>
           </dl>
+        </section>
+      ) : null}
+
+      {mode === "prescription" ? (
+        <section className="panel stack print-hidden dashboard-preview-panel">
+          <div className="row">
+            <div>
+              <h2>Rezeptvorschau</h2>
+              <p className="helper-text">
+                Live-Karte fuer Sichtpruefung und Ausdruck direkt aus dem Browser.
+              </p>
+            </div>
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={!text.trim()}
+              onClick={handlePrint}
+            >
+              Vorschau drucken
+            </button>
+          </div>
+
+          <article className="prescription-card printable-prescription">
+            <header className="prescription-card-header">
+              <div>
+                <p className="prescription-card-kicker">Rezeptvorschau</p>
+                <h3>Praxis Rezeptentwurf</h3>
+                <p className="prescription-card-subtitle">
+                  Live aus Diktat, Produktauswahl und manueller Korrektur aufgebaut.
+                </p>
+              </div>
+              <div className="prescription-card-badge">
+                <span>{demoMode ? "Demo" : "Live"}</span>
+              </div>
+            </header>
+
+            <div className="prescription-card-stat-grid">
+              <div className="prescription-card-stat">
+                <span>Patient</span>
+                <strong>{preview.patientReference || "Offen"}</strong>
+                <small>Patientenbezug im Diktat</small>
+              </div>
+              <div className="prescription-card-stat">
+                <span>Dosierung</span>
+                <strong>{preview.dosage || "Offen"}</strong>
+                <small>Automatisch erkannt oder manuell</small>
+              </div>
+              <div className="prescription-card-stat">
+                <span>PZN</span>
+                <strong>{preview.pzn || "Offen"}</strong>
+                <small>Aus Produktwahl oder manueller Eingabe</small>
+              </div>
+              <div className="prescription-card-stat">
+                <span>Status</span>
+                <strong>{text.trim() ? "Vorschau bereit" : "Warte auf Text"}</strong>
+                <small>Vor dem Versand fachlich pruefen</small>
+              </div>
+            </div>
+
+            <div className="prescription-card-grid">
+              <div className="prescription-card-field prescription-card-field-highlight prescription-card-field-wide">
+                <span>Patient</span>
+                <strong>{preview.patientReference || "Nicht angegeben"}</strong>
+              </div>
+              <div className="prescription-card-field">
+                <span>Medikament</span>
+                <strong>{preview.medicationName || "Nicht erkannt"}</strong>
+              </div>
+              <div className="prescription-card-field">
+                <span>Produkt</span>
+                <strong>{preview.productName || "Nicht ausgewaehlt"}</strong>
+              </div>
+              <div className="prescription-card-field">
+                <span>Dosierung</span>
+                <strong>{preview.dosage || "Offen"}</strong>
+              </div>
+              <div className="prescription-card-field">
+                <span>Menge</span>
+                <strong>{preview.quantity || "Offen"}</strong>
+              </div>
+              <div className="prescription-card-field">
+                <span>Darreichung</span>
+                <strong>{preview.form || "Offen"}</strong>
+              </div>
+              <div className="prescription-card-field">
+                <span>Hersteller</span>
+                <strong>{preview.manufacturer || "Offen"}</strong>
+              </div>
+              <div className="prescription-card-field">
+                <span>PZN</span>
+                <strong>{preview.pzn || "Offen"}</strong>
+              </div>
+            </div>
+
+            <section className="prescription-card-note prescription-card-note-emphasis">
+              <span>Freitext aus dem Diktat</span>
+              <p>{text.trim() || "Noch kein Rezepttext vorhanden."}</p>
+            </section>
+
+            <footer className="prescription-card-footer">
+              <span>Praxis Copilot</span>
+              <span>Vor dem Versand fachlich pruefen</span>
+            </footer>
+          </article>
         </section>
       ) : null}
 

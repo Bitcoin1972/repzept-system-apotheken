@@ -92,6 +92,91 @@ textarea {
   padding: 1.25rem;
 }
 
+.dashboard-stat-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.dashboard-stat-card {
+  background: rgba(255, 251, 245, 0.88);
+  border: 1px solid rgba(206, 181, 140, 0.22);
+  border-radius: 26px;
+  padding: 1.2rem;
+  box-shadow: 0 16px 34px rgba(96, 73, 36, 0.06);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.dashboard-stat-kicker {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d07a28;
+}
+
+.dashboard-stat-card strong {
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  line-height: 0.96;
+}
+
+.dashboard-stat-card span {
+  color: #72685d;
+}
+
+.dashboard-focus-panel {
+  padding: 1.6rem;
+  background:
+    radial-gradient(circle at bottom right, rgba(15, 118, 110, 0.08), transparent 25%),
+    linear-gradient(180deg, rgba(242, 244, 239, 0.82), rgba(240, 242, 235, 0.74));
+}
+
+.dashboard-focus-title {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  line-height: 0.98;
+}
+
+.dashboard-health-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.55rem 1rem;
+  background: rgba(15, 118, 110, 0.12);
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.dashboard-focus-score strong {
+  display: block;
+  font-size: clamp(2.2rem, 5vw, 3.5rem);
+  line-height: 0.95;
+  margin-bottom: 0.5rem;
+}
+
+.dashboard-focus-score p {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.dashboard-focus-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.dashboard-input-panel,
+.dashboard-product-panel,
+.dashboard-data-panel,
+.dashboard-preview-panel {
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.3), transparent 30%),
+    rgba(255, 252, 247, 0.92);
+}
+
 .row {
   display: flex;
   align-items: center;
@@ -289,6 +374,185 @@ textarea {
   color: var(--danger);
 }
 
+.print-hidden {
+  display: block;
+}
+
+.prescription-card {
+  border-radius: 32px;
+  border: 1px solid rgba(178, 141, 92, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(15, 118, 110, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(250, 246, 239, 0.98), rgba(244, 238, 226, 0.96));
+  padding: 1.5rem;
+  box-shadow:
+    0 24px 50px rgba(92, 73, 39, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.prescription-card-header,
+.prescription-card-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.prescription-card-header h3 {
+  margin: 0;
+  font-size: 2.15rem;
+  line-height: 0.96;
+}
+
+.prescription-card-kicker {
+  margin: 0 0 0.35rem;
+  color: #d07a28;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.prescription-card-subtitle {
+  margin: 0.55rem 0 0;
+  color: #6f6558;
+  max-width: 36rem;
+}
+
+.prescription-card-badge {
+  border: 1px solid rgba(15, 118, 110, 0.14);
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  background: rgba(15, 118, 110, 0.12);
+  color: var(--accent-strong);
+}
+
+.prescription-card-stat-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  margin: 1.5rem 0 1.25rem;
+}
+
+.prescription-card-stat {
+  display: grid;
+  gap: 0.25rem;
+  padding: 1.15rem 1.1rem;
+  border-radius: 24px;
+  background: rgba(255, 252, 247, 0.82);
+  border: 1px solid rgba(204, 182, 146, 0.18);
+  box-shadow: 0 12px 28px rgba(101, 79, 45, 0.06);
+}
+
+.prescription-card-stat span {
+  color: #d07a28;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.prescription-card-stat strong {
+  font-size: 1.65rem;
+  line-height: 0.98;
+}
+
+.prescription-card-stat small {
+  color: #786d60;
+  font-size: 0.95rem;
+}
+
+.prescription-card-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin: 0 0 1.25rem;
+}
+
+.prescription-card-field {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem 1.05rem;
+  border-radius: 20px;
+  background: rgba(255, 252, 248, 0.84);
+  border: 1px solid rgba(154, 134, 101, 0.12);
+}
+
+.prescription-card-field-highlight {
+  background:
+    linear-gradient(180deg, rgba(240, 245, 242, 0.96), rgba(234, 241, 238, 0.96));
+  border-color: rgba(15, 118, 110, 0.14);
+}
+
+.prescription-card-field-wide {
+  grid-column: 1 / -1;
+}
+
+.prescription-card-field span,
+.prescription-card-note span,
+.prescription-card-footer {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.prescription-card-field strong {
+  font-size: 1.05rem;
+}
+
+.prescription-card-note {
+  border-top: 1px solid rgba(204, 182, 146, 0.18);
+  border-bottom: 1px solid rgba(204, 182, 146, 0.18);
+  padding: 1rem 0;
+}
+
+.prescription-card-note-emphasis {
+  background: rgba(238, 244, 242, 0.68);
+  border: 1px solid rgba(15, 118, 110, 0.1);
+  border-radius: 28px;
+  padding: 1.15rem 1.2rem;
+}
+
+.prescription-card-note p {
+  margin: 0.45rem 0 0;
+  line-height: 1.6;
+}
+
+.prescription-card-footer {
+  margin-top: 1rem;
+}
+
+@media print {
+  body {
+    background: white;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .printable-prescription,
+  .printable-prescription * {
+    visibility: visible;
+  }
+
+  .printable-prescription {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: white;
+    padding: 0;
+  }
+
+  .print-hidden {
+    display: block;
+  }
+}
+
 @media (max-width: 640px) {
   .page-shell {
     width: min(100%, calc(100% - 1rem));
@@ -299,5 +563,22 @@ textarea {
   .panel,
   .response-card {
     border-radius: 20px;
+  }
+
+  .prescription-card {
+    padding: 1rem;
+    border-radius: 22px;
+  }
+
+  .prescription-card-header h3 {
+    font-size: 1.35rem;
+  }
+
+  .prescription-card-stat strong {
+    font-size: 1.35rem;
+  }
+
+  .dashboard-focus-panel {
+    padding: 1.2rem;
   }
 }
