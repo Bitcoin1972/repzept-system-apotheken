@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RequestStatus {
+  DRAFT
+  RELEASED
+  ANSWERED
+  CLOSED
+}
+
+enum PharmacyResponseStatus {
+  AVAILABLE
+  ORDERABLE
+  UNAVAILABLE
+}
+
+model Request {
+  id               String             @id @default(cuid())
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  status           RequestStatus      @default(DRAFT)
+  transcription    String
+  demoMode         Boolean            @default(false)
+  patientReference String?
+  medicationName   String?
+  productName      String?
+  manufacturer     String?
+  dosage           String?
+  form             String?
+  pzn              String?
+  quantity         String?
+  responses        PharmacyResponse[]
+}
+
+model PharmacyResponse {
+  id             String                 @id @default(cuid())
+  createdAt      DateTime               @default(now())
+  requestId      String
+  pharmacyName   String
+  responseStatus PharmacyResponseStatus
+  message        String
+  request        Request                @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+}
