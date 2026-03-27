@@ -42,9 +42,17 @@ type SpeechRecognitionAlternative = {
   transcript: string;
 };
 
+const todayValue = () => new Date().toISOString().slice(0, 10);
+
+const titleizePrescriptionType = (value: "RED" | "GREEN") =>
+  value === "RED" ? "Rotes Rezept" : "Gruenes Rezept";
+
 export function PracticeComposer() {
   const router = useRouter();
-  const [mode, setMode] = useState<"standard" | "prescription">("prescription");
+  const [doctorName, setDoctorName] = useState("Dr. med. Beispiel");
+  const [insuranceProvider, setInsuranceProvider] = useState("AOK Nordost");
+  const [prescriptionType, setPrescriptionType] = useState<"RED" | "GREEN">("RED");
+  const [issuedAt, setIssuedAt] = useState(todayValue());
   const [text, setText] = useState("");
   const [demoMode, setDemoMode] = useState(true);
   const [isListening, setIsListening] = useState(false);
@@ -52,39 +60,76 @@ export function PracticeComposer() {
   const [error, setError] = useState("");
   const [speechAvailable, setSpeechAvailable] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedManufacturer, setSelectedManufacturer] = useState("");
-  const [selectedProductId, setSelectedProductId] = useState("");
   const [manualManufacturer, setManualManufacturer] = useState("");
   const [manualPzn, setManualPzn] = useState("");
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [isDatabaseOpen, setIsDatabaseOpen] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const parsed = useMemo(() => parsePrescriptionText(text), [text]);
-  const manufacturers = useMemo(() => {
-    return Array.from(new Set(demoProducts.map((product) => product.manufacturer))).sort();
-  }, []);
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
     return demoProducts.filter((product) => {
-      const matchesSearch =
-        !normalizedSearch ||
-        [product.productName, product.manufacturer, product.dosage, product.form, product.pzn]
-          .join(" ")
-          .toLowerCase()
-          .includes(normalizedSearch);
+      if (!normalizedSearch) {
+        return true;
+      }
 
-      const matchesManufacturer =
-        !selectedManufacturer || product.manufacturer === selectedManufacturer;
-
-      return matchesSearch && matchesManufacturer;
+      return [product.productName, product.manufacturer, product.dosage, product.form, product.pzn]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch);
     });
-  }, [searchTerm, selectedManufacturer]);
+  }, [searchTerm]);
+
+  const autoMatchedProduct = useMemo(() => {
+    if (!parsed.medicationName && !parsed.dosage) {
+      return null;
+    }
+
+    const normalizedMedication = parsed.medicationName.toLowerCase();
+    const normalizedDosage = parsed.dosage.toLowerCase();
+
+    return (
+      demoProducts.find((product) => {
+        const haystack = [
+          product.productName,
+          product.manufacturer,
+          product.dosage,
+          product.form,
+          product.pzn,
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        const medicationMatch =
+          !normalizedMedication || haystack.includes(normalizedMedication);
+        const dosageMatch = !normalizedDosage || haystack.includes(normalizedDosage);
+
+        return medicationMatch && dosageMatch;
+      }) ?? null
+    );
+  }, [parsed.dosage, parsed.medicationName]);
 
   const selectedProduct = useMemo(() => {
-    return demoProducts.find((product) => product.id === selectedProductId) ?? null;
-  }, [selectedProductId]);
+    if (selectedProductId) {
+      return demoProducts.find((product) => product.id === selectedProductId) ?? null;
+    }
+
+    return autoMatchedProduct;
+  }, [autoMatchedProduct, selectedProductId]);
+
+  const summary = useMemo(() => {
+    return [
+      parsed.patientReference,
+      selectedProduct?.productName || parsed.medicationName,
+      selectedProduct?.dosage || parsed.dosage,
+      parsed.quantity,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }, [parsed.dosage, parsed.medicationName, parsed.patientReference, parsed.quantity, selectedProduct]);
 
   const preview = useMemo(() => {
     return {
@@ -98,19 +143,6 @@ export function PracticeComposer() {
       quantity: parsed.quantity,
     };
   }, [manualManufacturer, manualPzn, parsed, selectedProduct]);
-
-  const previewFieldCount = useMemo(() => {
-    return [
-      preview.patientReference,
-      preview.medicationName,
-      preview.productName,
-      preview.manufacturer,
-      preview.dosage,
-      preview.form,
-      preview.pzn,
-      preview.quantity,
-    ].filter(Boolean).length;
-  }, [preview]);
 
   useEffect(() => {
     setSpeechAvailable(Boolean(window.SpeechRecognition || window.webkitSpeechRecognition));
@@ -180,8 +212,8 @@ export function PracticeComposer() {
   };
 
   const handleSubmit = async () => {
-    if (mode !== "prescription") {
-      setError("Freigeben ist nur im Rezeptmodus verfuegbar.");
+    if (!text.trim()) {
+      setError("Bitte erst eine Verordnung diktieren oder eingeben.");
       return;
     }
 
@@ -197,11 +229,19 @@ export function PracticeComposer() {
         body: JSON.stringify({
           transcription: text,
           demoMode,
+          patientReference: preview.patientReference,
           productName: preview.productName,
           manufacturer: preview.manufacturer,
           dosage: preview.dosage,
           form: preview.form,
           pzn: preview.pzn,
+          quantity: preview.quantity,
+          doctorName,
+          insuranceProvider,
+          prescriptionType,
+          issuedAt,
+          summary,
+          medicationSource: selectedProductId ? "database-window" : autoMatchedProduct ? "speech-auto-match" : "speech-only",
         }),
       });
 
@@ -230,142 +270,102 @@ export function PracticeComposer() {
   return (
     <div className="stack">
       <section className="hero-card">
-        <p className="hero-kicker">Praxis Copilot</p>
-        <h1 className="hero-title">Diktat aufnehmen oder schreiben und als Rezeptentwurf pruefen</h1>
+        <p className="hero-kicker">Praxis Orga / E-Rezept</p>
+        <h1 className="hero-title">Spracherfassung, Vorschau, Freigabe</h1>
         <p className="hero-copy">
-          Im Rezeptmodus wird Sprache oder Texteingabe als Rezeptdiktat interpretiert. Die
-          Vorschau bleibt editierbar und kann vor der Freigabe gezielt verfeinert werden.
+          Die Ansicht bleibt auf drei Bereiche reduziert: Spracheingabe, Output und Rezeptvorschau.
+          Produktdetails werden automatisch im Hintergrund uebernommen oder gezielt ueber das Auswahlfenster gesetzt.
         </p>
       </section>
 
-      <section className="dashboard-stat-grid">
-        <article className="dashboard-stat-card">
-          <p className="dashboard-stat-kicker">Modus</p>
-          <strong>{mode === "prescription" ? "Rezeptmodus" : "Standard"}</strong>
-          <span>{mode === "prescription" ? "Strukturierter Entwurf aktiv" : "Freitext ohne Rezeptlogik"}</span>
-        </article>
-        <article className="dashboard-stat-card">
-          <p className="dashboard-stat-kicker">Rezeptfelder</p>
-          <strong>{previewFieldCount}/8</strong>
-          <span>Live aus Diktat und Produktauswahl befuellt</span>
-        </article>
-        <article className="dashboard-stat-card">
-          <p className="dashboard-stat-kicker">Produktstatus</p>
-          <strong>{selectedProduct ? "Ausgewaehlt" : "Offen"}</strong>
-          <span>{selectedProduct ? selectedProduct.productName : "Noch kein Demo-Produkt gesetzt"}</span>
-        </article>
-        <article className="dashboard-stat-card">
-          <p className="dashboard-stat-kicker">Druckansicht</p>
-          <strong>{text.trim() ? "Bereit" : "Warte"}</strong>
-          <span>{text.trim() ? "Vorschau kann direkt gedruckt werden" : "Bitte zuerst Rezepttext eingeben"}</span>
-        </article>
-      </section>
-
-      <section className="panel stack dashboard-focus-panel">
+      <section className="panel stack dashboard-input-panel">
         <div className="row">
           <div>
-            <p className="hero-kicker">Rezeptstatus</p>
-            <h2 className="dashboard-focus-title">Wie belastbar ist der aktuelle Rezeptentwurf?</h2>
+            <h2>Eingabe Sprache</h2>
+            <p className="helper-text">Diktat aufnehmen oder Text direkt eingeben. Die Verarbeitung laeuft im Hintergrund.</p>
           </div>
-          <span className="dashboard-health-pill">
-            {previewFieldCount >= 6 ? "Stabil" : previewFieldCount >= 3 ? "In Arbeit" : "Rohentwurf"}
-          </span>
-        </div>
-        <div className="dashboard-focus-score">
-          <strong>{Math.round((previewFieldCount / 8) * 100)}/100</strong>
-          <p>
-            {previewFieldCount >= 6
-              ? "Der Entwurf ist weitgehend befuellt und bereit fuer Sichtpruefung oder Ausdruck."
-              : "Es fehlen noch strukturierte Angaben fuer einen vollstaendigen Rezeptentwurf."}
-          </p>
-        </div>
-        <ul className="dashboard-focus-list">
-          <li>Produktsuche kann Hersteller, Form und PZN direkt in den Entwurf uebernehmen.</li>
-          <li>Die Live-Vorschau reagiert sofort auf Diktat, Freitext und manuelle Korrekturen.</li>
-          <li>Vor Freigabe oder Ausdruck sollte die fachliche Plausibilitaet geprueft werden.</li>
-        </ul>
-      </section>
-
-      <section className="panel stack dashboard-input-panel">
-        <div className="mode-switch" role="tablist" aria-label="Modus">
-          <button
-            type="button"
-            className={mode === "standard" ? "mode-button mode-button-active" : "mode-button"}
-            onClick={() => setMode("standard")}
-          >
-            Standard
-          </button>
-          <button
-            type="button"
-            className={
-              mode === "prescription" ? "mode-button mode-button-active" : "mode-button"
-            }
-            onClick={() => setMode("prescription")}
-          >
-            Rezeptmodus
-          </button>
-        </div>
-
-        <div className="row">
           <button className="microphone-button" type="button" onClick={toggleSpeech}>
-            {isListening ? "Sprachaufnahme stoppen" : "Sprachaufnahme starten"}
+            {isListening ? "Aufnahme stoppen" : "Aufnahme starten"}
           </button>
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={demoMode}
-              onChange={(event) => setDemoMode(event.target.checked)}
-            />
-            Demo-Modus
-          </label>
         </div>
 
         {!speechAvailable ? (
           <p className="helper-text">
-            Dieser Browser unterstuetzt keine SpeechRecognition. Die manuelle Texteingabe
-            bleibt verfuegbar.
+            Dieser Browser unterstuetzt keine SpeechRecognition. Die manuelle Eingabe bleibt
+            verfuegbar.
           </p>
         ) : null}
 
         <div>
           <label className="field-label" htmlFor="transcription">
-            {mode === "prescription"
-              ? "Rezeptdiktat oder manuell angepasster Text"
-              : "Standard-Eingabe"}
+            Verordnung / Diktat
           </label>
           <textarea
             id="transcription"
-            ref={textAreaRef}
             className="textarea"
             value={text}
             onChange={(event) => setText(event.target.value)}
-            placeholder={
-              mode === "prescription"
-                ? "Zum Beispiel: Mueller, Ibuprofen 600, 2 Packungen, Tabletten"
-                : "Freitext fuer den Standardmodus"
-            }
+            placeholder="Zum Beispiel: Max Mueller, Ibuprofen 600, 2 Packungen, Filmtabletten, bei Bedarf 1-0-1"
           />
         </div>
-
-        {mode === "standard" ? (
-          <p className="helper-text">
-            Der Standardmodus bleibt eine einfache Copilot-Eingabe. Rezeptentwurf,
-            Produktauswahl und Freigabe sind nur im Rezeptmodus aktiv.
-          </p>
-        ) : null}
       </section>
 
-      {mode === "prescription" ? (
-        <section className="panel stack dashboard-product-panel">
-          <div className="row">
-            <h2>Strukturierte Produktauswahl</h2>
-            <span className="status-pill">Demo-Arzneiliste</span>
+      <section className="panel stack dashboard-output-panel">
+        <div className="row">
+          <div>
+            <h2>Output</h2>
+            <p className="helper-text">Erkanntes Ergebnis und Quelle der Produktdaten.</p>
           </div>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => setIsDatabaseOpen(true)}
+          >
+            Medikament auswaehlen
+          </button>
+        </div>
 
-          <div className="search-grid">
+        <section className="summary-strip">
+          <span className="summary-strip-label">Automatische Zusammenfassung</span>
+          <strong>{summary || "Noch keine strukturierte Zusammenfassung vorhanden."}</strong>
+        </section>
+
+        <dl className="output-grid">
+          <div className="preview-item">
+            <dt>Patient</dt>
+            <dd>{preview.patientReference || "-"}</dd>
+          </div>
+          <div className="preview-item">
+            <dt>Medikament</dt>
+            <dd>{preview.medicationName || "-"}</dd>
+          </div>
+          <div className="preview-item">
+            <dt>Dosierung</dt>
+            <dd>{preview.dosage || "-"}</dd>
+          </div>
+          <div className="preview-item">
+            <dt>Quelle</dt>
+            <dd>{selectedProductId ? "Datenbankfenster" : autoMatchedProduct ? "Automatischer Treffer" : "Nur Spracheingabe"}</dd>
+          </div>
+        </dl>
+      </section>
+
+      {isDatabaseOpen ? (
+        <section className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Medikamentendatenbank">
+          <div className="modal-card">
+            <div className="row">
+              <div>
+                <p className="hero-kicker">Medikamentendatenbank</p>
+                <h2 className="modal-title">Suche oeffnen und uebernehmen</h2>
+              </div>
+              <button className="secondary-button" type="button" onClick={() => setIsDatabaseOpen(false)}>
+                Schliessen
+              </button>
+            </div>
+
             <div>
               <label className="field-label" htmlFor="product-search">
-                Medikament suchen
+                Wirkstoff, Produkt oder PZN suchen
               </label>
               <input
                 id="product-search"
@@ -373,282 +373,149 @@ export function PracticeComposer() {
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Zum Beispiel Ibuprofen"
+                placeholder="Ibuprofen, PZN oder Hersteller"
               />
             </div>
 
-            <div>
-              <label className="field-label" htmlFor="manufacturer-filter">
-                Hersteller optional auswaehlen
-              </label>
-              <select
-                id="manufacturer-filter"
-                className="text-input"
-                value={selectedManufacturer}
-                onChange={(event) => setSelectedManufacturer(event.target.value)}
-              >
-                <option value="">Alle Hersteller</option>
-                {manufacturers.map((manufacturer) => (
-                  <option key={manufacturer} value={manufacturer}>
-                    {manufacturer}
-                  </option>
-                ))}
-              </select>
+            <div className="product-list modal-product-list">
+              {filteredProducts.map((product) => {
+                const isSelected = selectedProduct?.id === product.id;
+
+                return (
+                  <button
+                    key={product.id}
+                    type="button"
+                    className={isSelected ? "product-card product-card-selected" : "product-card"}
+                    onClick={() => {
+                      setSelectedProductId(product.id);
+                      setIsDatabaseOpen(false);
+                    }}
+                  >
+                    <strong>{product.productName}</strong>
+                    <span>{product.manufacturer}</span>
+                    <span>
+                      {product.dosage} · {product.form}
+                    </span>
+                    <span>PZN {product.pzn}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
-
-          <div className="product-list">
-            {filteredProducts.map((product) => {
-              const isSelected = product.id === selectedProductId;
-
-              return (
-                <button
-                  key={product.id}
-                  type="button"
-                  className={isSelected ? "product-card product-card-selected" : "product-card"}
-                  onClick={() => setSelectedProductId(product.id)}
-                >
-                  <strong>{product.productName}</strong>
-                  <span>{product.manufacturer}</span>
-                  <span>
-                    {product.dosage} · {product.form}
-                  </span>
-                  <span>PZN {product.pzn}</span>
-                </button>
-              );
-            })}
-
-            {!filteredProducts.length ? (
-              <p className="helper-text">
-                Keine Demo-Produkte gefunden. Die Freigabe bleibt auch nur mit Diktat und
-                manueller Korrektur moeglich.
-              </p>
-            ) : null}
-          </div>
-
-          <div className="search-grid">
-            <div>
-              <label className="field-label" htmlFor="manual-manufacturer">
-                manufacturer optional
-              </label>
-              <input
-                id="manual-manufacturer"
-                className="text-input"
-                type="text"
-                value={manualManufacturer}
-                onChange={(event) => setManualManufacturer(event.target.value)}
-                placeholder="Zum Beispiel Hexal"
-              />
-            </div>
-
-            <div>
-              <label className="field-label" htmlFor="manual-pzn">
-                pzn optional
-              </label>
-              <input
-                id="manual-pzn"
-                className="text-input"
-                type="text"
-                value={manualPzn}
-                onChange={(event) => setManualPzn(event.target.value)}
-                placeholder="Zum Beispiel 01234567"
-              />
-            </div>
-          </div>
-
-          {selectedProduct ? (
-            <div className="row">
-              <p className="helper-text">
-                Die Produktauswahl uebernimmt `productName`, `manufacturer`, `dosage`, `form`
-                und `pzn` in den Rezeptentwurf.
-              </p>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setSelectedProductId("")}
-              >
-                Produktauswahl loesen
-              </button>
-            </div>
-          ) : null}
         </section>
       ) : null}
 
-      {mode === "prescription" ? (
-        <section className="panel stack dashboard-data-panel">
-          <div className="row">
-            <h2>Rezeptentwurf</h2>
-            <span className="status-pill">Live geparst</span>
+      <section className="panel stack print-hidden dashboard-preview-panel">
+        <div className="row">
+          <div>
+            <h2>Rezeptvorschau</h2>
+            <p className="helper-text">Die Vorschau zeigt den Datensatz, der bei Freigabe gespeichert wird.</p>
           </div>
-          <dl className="preview-grid">
-            <div className="preview-item">
-              <dt>patientReference</dt>
-              <dd>{preview.patientReference || "-"}</dd>
-            </div>
-            <div className="preview-item">
-              <dt>medicationName</dt>
-              <dd>{preview.medicationName || "-"}</dd>
-            </div>
-            <div className="preview-item">
-              <dt>dosage</dt>
-              <dd>{preview.dosage || "-"}</dd>
-            </div>
-            <div className="preview-item">
-              <dt>quantity</dt>
-              <dd>{preview.quantity || "-"}</dd>
-            </div>
-            <div className="preview-item">
-              <dt>form</dt>
-              <dd>{preview.form || "-"}</dd>
-            </div>
-            <div className="preview-item">
-              <dt>manufacturer</dt>
-              <dd>{preview.manufacturer || "-"}</dd>
-            </div>
-            <div className="preview-item">
-              <dt>pzn</dt>
-              <dd>{preview.pzn || "-"}</dd>
-            </div>
-            <div className="preview-item">
-              <dt>productName</dt>
-              <dd>{preview.productName || "-"}</dd>
-            </div>
-          </dl>
-        </section>
-      ) : null}
+          <button className="secondary-button" type="button" disabled={!text.trim()} onClick={handlePrint}>
+            Rezept drucken
+          </button>
+        </div>
 
-      {mode === "prescription" ? (
-        <section className="panel stack print-hidden dashboard-preview-panel">
-          <div className="row">
+        <article
+          className={`prescription-card printable-prescription prescription-card-${prescriptionType.toLowerCase()}`}
+        >
+          <header className="prescription-card-header">
             <div>
-              <h2>Rezeptvorschau</h2>
-              <p className="helper-text">
-                Live-Karte fuer Sichtpruefung und Ausdruck direkt aus dem Browser.
+              <p className="prescription-card-kicker">{titleizePrescriptionType(prescriptionType)}</p>
+              <h3>Freigabesigniert von {doctorName || "Dr. ..."}</h3>
+              <p className="prescription-card-subtitle">
+                Apothekensicht: signierter Rezeptdatensatz mit uebernommenen Medikamentendaten.
               </p>
             </div>
-            <button
-              className="secondary-button"
-              type="button"
-              disabled={!text.trim()}
-              onClick={handlePrint}
-            >
-              Vorschau drucken
-            </button>
+            <div className="prescription-card-badge">
+              <span>Signatur bereit</span>
+            </div>
+          </header>
+
+          <div className="prescription-card-stat-grid">
+            <div className="prescription-card-stat">
+              <span>Patient</span>
+              <strong>{preview.patientReference || "Offen"}</strong>
+              <small>Empfaenger der Verordnung</small>
+            </div>
+            <div className="prescription-card-stat">
+              <span>Krankenkasse</span>
+              <strong>{insuranceProvider || "Offen"}</strong>
+              <small>Rabatt- und Kostentraegerlogik spaeter anschliessbar</small>
+            </div>
+            <div className="prescription-card-stat">
+              <span>Datum</span>
+              <strong>{issuedAt || todayValue()}</strong>
+              <small>Ausstellungsdatum des Rezepts</small>
+            </div>
+            <div className="prescription-card-stat">
+              <span>Signaturstatus</span>
+              <strong>SIGNIERT</strong>
+              <small>Wird bei Freigabe mit Arztbezug gespeichert</small>
+            </div>
           </div>
 
-          <article className="prescription-card printable-prescription">
-            <header className="prescription-card-header">
-              <div>
-                <p className="prescription-card-kicker">Rezeptvorschau</p>
-                <h3>Praxis Rezeptentwurf</h3>
-                <p className="prescription-card-subtitle">
-                  Live aus Diktat, Produktauswahl und manueller Korrektur aufgebaut.
-                </p>
-              </div>
-              <div className="prescription-card-badge">
-                <span>{demoMode ? "Demo" : "Live"}</span>
-              </div>
-            </header>
-
-            <div className="prescription-card-stat-grid">
-              <div className="prescription-card-stat">
-                <span>Patient</span>
-                <strong>{preview.patientReference || "Offen"}</strong>
-                <small>Patientenbezug im Diktat</small>
-              </div>
-              <div className="prescription-card-stat">
-                <span>Dosierung</span>
-                <strong>{preview.dosage || "Offen"}</strong>
-                <small>Automatisch erkannt oder manuell</small>
-              </div>
-              <div className="prescription-card-stat">
-                <span>PZN</span>
-                <strong>{preview.pzn || "Offen"}</strong>
-                <small>Aus Produktwahl oder manueller Eingabe</small>
-              </div>
-              <div className="prescription-card-stat">
-                <span>Status</span>
-                <strong>{text.trim() ? "Vorschau bereit" : "Warte auf Text"}</strong>
-                <small>Vor dem Versand fachlich pruefen</small>
-              </div>
+          <div className="prescription-card-grid">
+            <div className="prescription-card-field prescription-card-field-highlight prescription-card-field-wide">
+              <span>Verordnender Arzt</span>
+              <strong>{doctorName || "Nicht angegeben"}</strong>
             </div>
-
-            <div className="prescription-card-grid">
-              <div className="prescription-card-field prescription-card-field-highlight prescription-card-field-wide">
-                <span>Patient</span>
-                <strong>{preview.patientReference || "Nicht angegeben"}</strong>
-              </div>
-              <div className="prescription-card-field">
-                <span>Medikament</span>
-                <strong>{preview.medicationName || "Nicht erkannt"}</strong>
-              </div>
-              <div className="prescription-card-field">
-                <span>Produkt</span>
-                <strong>{preview.productName || "Nicht ausgewaehlt"}</strong>
-              </div>
-              <div className="prescription-card-field">
-                <span>Dosierung</span>
-                <strong>{preview.dosage || "Offen"}</strong>
-              </div>
-              <div className="prescription-card-field">
-                <span>Menge</span>
-                <strong>{preview.quantity || "Offen"}</strong>
-              </div>
-              <div className="prescription-card-field">
-                <span>Darreichung</span>
-                <strong>{preview.form || "Offen"}</strong>
-              </div>
-              <div className="prescription-card-field">
-                <span>Hersteller</span>
-                <strong>{preview.manufacturer || "Offen"}</strong>
-              </div>
-              <div className="prescription-card-field">
-                <span>PZN</span>
-                <strong>{preview.pzn || "Offen"}</strong>
-              </div>
+            <div className="prescription-card-field">
+              <span>Medikament</span>
+              <strong>{preview.medicationName || "Nicht erkannt"}</strong>
             </div>
+            <div className="prescription-card-field">
+              <span>Produkt</span>
+              <strong>{preview.productName || "Nicht aus Datenbank uebernommen"}</strong>
+            </div>
+            <div className="prescription-card-field">
+              <span>Dosierung</span>
+              <strong>{preview.dosage || "Offen"}</strong>
+            </div>
+            <div className="prescription-card-field">
+              <span>Menge</span>
+              <strong>{preview.quantity || "Offen"}</strong>
+            </div>
+            <div className="prescription-card-field">
+              <span>Darreichung</span>
+              <strong>{preview.form || "Offen"}</strong>
+            </div>
+            <div className="prescription-card-field">
+              <span>Hersteller</span>
+              <strong>{preview.manufacturer || "Offen"}</strong>
+            </div>
+            <div className="prescription-card-field">
+              <span>PZN</span>
+              <strong>{preview.pzn || "Offen"}</strong>
+            </div>
+          </div>
 
-            <section className="prescription-card-note prescription-card-note-emphasis">
-              <span>Freitext aus dem Diktat</span>
-              <p>{text.trim() || "Noch kein Rezepttext vorhanden."}</p>
-            </section>
+          <section className="prescription-card-note prescription-card-note-emphasis">
+            <span>Diktat / Verordnungszusammenfassung</span>
+            <p>{text.trim() || "Noch kein Rezepttext vorhanden."}</p>
+          </section>
 
-            <footer className="prescription-card-footer">
-              <span>Praxis Copilot</span>
-              <span>Vor dem Versand fachlich pruefen</span>
-            </footer>
-          </article>
-        </section>
-      ) : null}
+          <footer className="prescription-card-footer">
+            <span>Systemstatus: an Apotheke freigabesigniert uebergabefaehig</span>
+            <span>Quelle: {selectedProductId ? "Medikamentendatenbank" : autoMatchedProduct ? "Automatischer Datenbanktreffer" : "Diktat ohne Match"}</span>
+          </footer>
+        </article>
+      </section>
 
       <section className="panel stack">
         {error ? <p className="error-text">{error}</p> : null}
         <div className="row">
           <p className="helper-text">
-            {mode === "prescription"
-              ? "Im Rezeptmodus kannst du den Entwurf korrigieren oder direkt als RELEASED freigeben."
-              : "Wechsle in den Rezeptmodus, um aus dem Diktat einen strukturierten Entwurf zu erzeugen."}
+            Beim Freigeben wird der Datensatz signiert gespeichert. Die weiteren Schritte laufen danach ohne zusaetzliche Eingaben weiter.
           </p>
-          <div className="action-row">
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => {
-                textAreaRef.current?.focus();
-                setError("");
-              }}
-            >
-              Korrigieren
-            </button>
-            <button
-              className="primary-button"
-              type="button"
-              disabled={mode !== "prescription" || !text.trim() || isSubmitting}
-              onClick={handleSubmit}
-            >
-              {isSubmitting ? "Wird freigegeben..." : "Freigeben"}
-            </button>
-          </div>
+          <button
+            className="primary-button"
+            type="button"
+            disabled={!text.trim() || isSubmitting}
+            onClick={handleSubmit}
+          >
+            {isSubmitting ? "Wird freigegeben..." : "Freigeben"}
+          </button>
         </div>
       </section>
     </div>

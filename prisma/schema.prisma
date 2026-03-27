@@ -20,6 +20,16 @@ enum PharmacyResponseStatus {
   UNAVAILABLE
 }
 
+enum PrescriptionType {
+  RED
+  GREEN
+}
+
+enum SignatureStatus {
+  DRAFT
+  SIGNED
+}
+
 model Request {
   id               String             @id @default(cuid())
   createdAt        DateTime           @default(now())
@@ -35,6 +45,15 @@ model Request {
   form             String?
   pzn              String?
   quantity         String?
+  doctorName       String?
+  insuranceProvider String?
+  prescriptionType PrescriptionType   @default(RED)
+  signatureStatus  SignatureStatus    @default(DRAFT)
+  signedBy         String?
+  signedAt         DateTime?
+  issuedAt         DateTime?
+  medicationSource String?
+  summary          String?
   responses        PharmacyResponse[]
 }
 

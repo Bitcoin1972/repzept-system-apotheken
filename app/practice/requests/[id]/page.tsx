@@ -29,14 +29,18 @@ export default async function PracticeRequestDetailPage({ params }: PageProps) {
   return (
     <main className="page-shell stack">
       <section className="hero-card">
-        <p className="hero-kicker">Praxis / Detailansicht</p>
-        <h1 className="hero-title">Fall wurde freigegeben</h1>
+        <p className="hero-kicker">Apotheke / Eingangsansicht</p>
+        <h1 className="hero-title">
+          Rezept freigabesigniert von {request.signedBy || request.doctorName || "Dr. ..."}
+        </h1>
         <p className="hero-copy">
-          Der gespeicherte Text, die geparsten Felder und die Apotheken-Antworten stehen
-          direkt nach der Freigabe bereit.
+          Die Apotheke sieht den signierten Rezeptdatensatz mit Verordnungsdetails, Rezepttyp
+          und uebernommenen Medikamentendaten unmittelbar nach der Freigabe.
         </p>
         <div className="row">
           <span className="status-pill">Status: {request.status}</span>
+          <span className="status-pill">Signatur: {request.signatureStatus}</span>
+          <span className="status-pill">Typ: {request.prescriptionType}</span>
           <span className="status-pill">
             {request.demoMode ? "Demo-Modus aktiv" : "Demo-Modus aus"}
           </span>
@@ -46,44 +50,76 @@ export default async function PracticeRequestDetailPage({ params }: PageProps) {
         </div>
       </section>
 
+      <section
+        className={`panel stack ${
+          request.prescriptionType === "GREEN" ? "detail-prescription-green" : "detail-prescription-red"
+        }`}
+      >
+        <div className="row">
+          <h2>Freigabeansicht</h2>
+          <span className="status-pill">
+            {request.signedAt ? new Date(request.signedAt).toLocaleString("de-DE") : "Noch nicht signiert"}
+          </span>
+        </div>
+        <div className="preview-grid">
+          <div className="preview-item">
+            <dt>Arzt</dt>
+            <dd>{request.doctorName || "-"}</dd>
+          </div>
+          <div className="preview-item">
+            <dt>Krankenkasse</dt>
+            <dd>{request.insuranceProvider || "-"}</dd>
+          </div>
+          <div className="preview-item">
+            <dt>Ausgestellt</dt>
+            <dd>{request.issuedAt ? new Date(request.issuedAt).toLocaleDateString("de-DE") : "-"}</dd>
+          </div>
+          <div className="preview-item">
+            <dt>Datenquelle</dt>
+            <dd>{request.medicationSource || "-"}</dd>
+          </div>
+        </div>
+        <p>{request.summary || "Keine automatische Zusammenfassung gespeichert."}</p>
+      </section>
+
       <section className="panel stack">
-        <h2>Erfasster Text</h2>
+        <h2>Diktat / Freitext</h2>
         <p>{request.transcription}</p>
       </section>
 
       <section className="panel stack">
-        <h2>Strukturierte Daten</h2>
+        <h2>Rezeptdaten</h2>
         <dl className="preview-grid">
           <div className="preview-item">
-            <dt>patientReference</dt>
+            <dt>Patient</dt>
             <dd>{request.patientReference || "-"}</dd>
           </div>
           <div className="preview-item">
-            <dt>medicationName</dt>
+            <dt>Medikament</dt>
             <dd>{request.medicationName || "-"}</dd>
           </div>
           <div className="preview-item">
-            <dt>productName</dt>
+            <dt>Produkt</dt>
             <dd>{request.productName || "-"}</dd>
           </div>
           <div className="preview-item">
-            <dt>manufacturer</dt>
+            <dt>Hersteller</dt>
             <dd>{request.manufacturer || "-"}</dd>
           </div>
           <div className="preview-item">
-            <dt>dosage</dt>
+            <dt>Dosierung</dt>
             <dd>{request.dosage || "-"}</dd>
           </div>
           <div className="preview-item">
-            <dt>form</dt>
+            <dt>Form</dt>
             <dd>{request.form || "-"}</dd>
           </div>
           <div className="preview-item">
-            <dt>pzn</dt>
+            <dt>PZN</dt>
             <dd>{request.pzn || "-"}</dd>
           </div>
           <div className="preview-item">
-            <dt>quantity</dt>
+            <dt>Menge</dt>
             <dd>{request.quantity || "-"}</dd>
           </div>
         </dl>
