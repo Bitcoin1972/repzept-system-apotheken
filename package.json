@@ -8,9 +8,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "deploy:prepare": "npm run prisma:migrate:deploy && npm run prisma:generate && npm run build",
+    "start:deploy": "npm run deploy:prepare && npm run start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",

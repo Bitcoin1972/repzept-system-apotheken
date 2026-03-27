@@ -50,3 +50,19 @@ Oder kompakt:
 cp .env.example .env
 npm run start:local
 ```
+
+## Deployment
+
+Fuer eine Zielumgebung mit bestehender Datenbank:
+
+```bash
+npm install
+npm run deploy:prepare
+npm run start
+```
+
+Wenn die Plattform nur einen einzelnen Startbefehl erwartet:
+
+```bash
+npm run start:deploy
+```
