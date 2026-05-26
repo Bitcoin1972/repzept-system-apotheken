@@ -1,182 +1,209 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PharmacyReleaseStatus } from "@prisma/client";
+import {
+  PharmacyReleaseStatus,
+  RequestDistributionStatus,
+} from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 
-type PageProps = {
+type PageContext = {
   params: Promise<{
     id: string;
   }>;
 };
 
-export default async function PracticeRequestDetailPage({ params }: PageProps) {
-  const { id } = await params;
+function formatDate(value?: Date | null) {
+  if (!value) {
+    return "offen";
+  }
 
-  const request = await prisma.request.findUnique({
-    where: { id },
+  return new Intl.DateTimeFormat("de-DE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(value);
+}
+
+export default async function PracticeRequestPage({ params }: PageContext) {
+  const resolvedParams = await params;
+
+  const requestRecord = await prisma.request.findUnique({
+    where: {
+      id: resolvedParams.id,
+    },
     include: {
+      practice: true,
+      releasedByDoctor: true,
+      requestDistributions: {
+        include: {
+          pharmacy: true,
+          connection: true,
+        },
+        orderBy: {
+          releasedAt: "asc",
+        },
+      },
+      dispenseLogs: {
+        include: {
+          pharmacy: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
+      supportTickets: {
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
       responses: {
         orderBy: {
-          createdAt: "asc",
+          createdAt: "desc",
         },
       },
     },
   });
 
-  if (!request) {
+  if (!requestRecord) {
     notFound();
   }
 
-  const pharmacyReleaseLabel =
-    request.pharmacyReleaseStatus === PharmacyReleaseStatus.PRE_RELEASED
-      ? "Vorab freigegeben"
-      : request.pharmacyReleaseStatus === PharmacyReleaseStatus.STANDARD_FLOW_COMPLETED
-        ? "Regulaerer Weg abgeschlossen"
-        : "Noch nicht freigegeben";
-
-  const normalFlowLabel = request.normalFlowPending
-    ? "Regulaerer Weg folgt noch"
-    : "Regulaerer Weg abgeschlossen";
-
   return (
-    <main className="page-shell stack">
-      <section className="hero-card">
-        <p className="hero-kicker">Apotheke / Eingangsansicht</p>
-        <h1 className="hero-title">
-          Rezept freigabesigniert von {request.signedBy || request.doctorName || "Dr. ..."}
-        </h1>
-        <p className="hero-copy">
-          Die Apotheke sieht sofort, dass dieses Rezept bereits vorab freigegeben wurde,
-          welchen Rezepttyp es hat und dass der regulaere Weg spaeter noch folgt.
-        </p>
-        <div className="row">
-          <span className="status-pill">Status: {request.status}</span>
-          <span className="status-pill">Apothekenfreigabe: {pharmacyReleaseLabel}</span>
-          <span className="status-pill">Weiterer Ablauf: {normalFlowLabel}</span>
-          <span className="status-pill">Signatur: {request.signatureStatus}</span>
-          <span className="status-pill">Typ: {request.prescriptionType}</span>
-          <span className="status-pill">
-            {request.demoMode ? "Demo-Modus aktiv" : "Demo-Modus aus"}
-          </span>
-          <Link href="/practice/new" className="secondary-button">
-            Neuer Fall
+    <main className="workspace-shell">
+      <section className="workspace-hero">
+        <div>
+          <p className="eyebrow">Freigabedetail</p>
+          <h1>{requestRecord.summary ?? "Rezeptdetail"}</h1>
+          <p className="hero-copy">
+            {requestRecord.practice?.name ?? "Praxis"} · {requestRecord.releasedByDoctor?.name ?? requestRecord.doctorName}
+          </p>
+        </div>
+        <div className="hero-actions">
+          <Link href="/practice/new" className="secondary-link">
+            Neue Freigabe
+          </Link>
+          <Link href="/pharmacy" className="secondary-link">
+            Apotheker-Ansicht
           </Link>
         </div>
       </section>
 
-      <section
-        className={`panel stack ${
-          request.prescriptionType === "GREEN" ? "detail-prescription-green" : "detail-prescription-red"
-        }`}
-      >
-        <div className="row">
-          <h2>Freigabeansicht</h2>
-          <span className="status-pill">
-            {request.signedAt ? new Date(request.signedAt).toLocaleString("de-DE") : "Noch nicht signiert"}
-          </span>
-        </div>
-        <div className="preview-grid">
-          <div className="preview-item">
-            <dt>Apothekenstatus</dt>
-            <dd>{pharmacyReleaseLabel}</dd>
-          </div>
-          <div className="preview-item">
-            <dt>Weiterer Ablauf</dt>
-            <dd>{normalFlowLabel}</dd>
-          </div>
-          <div className="preview-item">
-            <dt>Arzt</dt>
-            <dd>{request.doctorName || "-"}</dd>
-          </div>
-          <div className="preview-item">
-            <dt>Krankenkasse</dt>
-            <dd>{request.insuranceProvider || "-"}</dd>
-          </div>
-          <div className="preview-item">
-            <dt>Ausgestellt</dt>
-            <dd>{request.issuedAt ? new Date(request.issuedAt).toLocaleDateString("de-DE") : "-"}</dd>
-          </div>
-          <div className="preview-item">
-            <dt>Datenquelle</dt>
-            <dd>{request.medicationSource || "-"}</dd>
-          </div>
-          <div className="preview-item">
-            <dt>Freigegeben an Apotheke</dt>
-            <dd>
-              {request.releasedToPharmacyAt
-                ? new Date(request.releasedToPharmacyAt).toLocaleString("de-DE")
-                : "-"}
-            </dd>
-          </div>
-        </div>
-        <p>{request.summary || "Keine automatische Zusammenfassung gespeichert."}</p>
-        {request.normalFlowPending ? (
-          <p className="pharmacy-warning-banner">
-            Hinweis fuer die Apotheke: Dieses Rezept wurde bereits vorab freigegeben. Der
-            regulaere Einloese- und Abgabeweg folgt noch und darf nicht doppelt bedient werden.
-          </p>
-        ) : null}
-      </section>
-
-      <section className="panel stack">
-        <h2>Diktat / Freitext</h2>
-        <p>{request.transcription}</p>
-      </section>
-
-      <section className="panel stack">
-        <h2>Rezeptdaten</h2>
-        <dl className="preview-grid">
-          <div className="preview-item">
-            <dt>Patient</dt>
-            <dd>{request.patientReference || "-"}</dd>
-          </div>
-          <div className="preview-item">
-            <dt>Medikament</dt>
-            <dd>{request.medicationName || "-"}</dd>
-          </div>
-          <div className="preview-item">
-            <dt>Produkt</dt>
-            <dd>{request.productName || "-"}</dd>
-          </div>
-          <div className="preview-item">
-            <dt>Hersteller</dt>
-            <dd>{request.manufacturer || "-"}</dd>
-          </div>
-          <div className="preview-item">
-            <dt>Dosierung</dt>
-            <dd>{request.dosage || "-"}</dd>
-          </div>
-          <div className="preview-item">
-            <dt>Form</dt>
-            <dd>{request.form || "-"}</dd>
-          </div>
-          <div className="preview-item">
-            <dt>PZN</dt>
-            <dd>{request.pzn || "-"}</dd>
-          </div>
-          <div className="preview-item">
-            <dt>Menge</dt>
-            <dd>{request.quantity || "-"}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section className="panel stack">
-        <div className="row">
-          <h2>Apotheken-Antworten</h2>
-          <span className="status-pill">{request.responses.length} Antworten</span>
-        </div>
-        <div className="response-grid">
-          {request.responses.map((response) => (
-            <article key={response.id} className="response-card">
-              <h3>{response.pharmacyName}</h3>
-              <div className="response-meta">
-                <span className="status-pill">{response.responseStatus}</span>
+      <section className="composer-layout">
+        <div className="composer-main">
+          <article className="panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Rezeptstatus</p>
+                <h2>Freigabe und Normalweg</h2>
               </div>
-              <p>{response.message}</p>
-            </article>
-          ))}
+            </div>
+            <div className="stack-list">
+              <div className="stack-item">
+                <strong>Freigabestatus</strong>
+                <span>{requestRecord.pharmacyReleaseStatus}</span>
+              </div>
+              <div className="stack-item">
+                <strong>Normaler Weg offen</strong>
+                <span>{requestRecord.normalFlowPending ? "ja" : "nein"}</span>
+              </div>
+              <div className="stack-item">
+                <strong>Signiert</strong>
+                <span>{formatDate(requestRecord.signedAt)}</span>
+              </div>
+              <div className="stack-item">
+                <strong>Rezepttext</strong>
+                <span>{requestRecord.outputText ?? requestRecord.transcription ?? "kein Output gespeichert"}</span>
+              </div>
+            </div>
+            {requestRecord.pharmacyReleaseStatus === PharmacyReleaseStatus.PRE_RELEASED ? (
+              <div className="release-banner warning">
+                Bereits an Apotheke freigegeben. Wenn der regulaere Weg spaeter ankommt, darf nicht
+                doppelt ausgegeben werden.
+              </div>
+            ) : null}
+          </article>
+
+          <article className="panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Apotheken-Verteilung</p>
+                <h2>Wer hat das Rezept erhalten?</h2>
+              </div>
+            </div>
+            <div className="stack-list">
+              {requestRecord.requestDistributions.map((distribution) => (
+                <div key={distribution.id} className="stack-item">
+                  <strong>{distribution.pharmacy.name}</strong>
+                  <span>{distribution.status}</span>
+                  <span>Freigegeben: {formatDate(distribution.releasedAt)}</span>
+                  {distribution.status === RequestDistributionStatus.BLOCKED_DUPLICATE ? (
+                    <span>Doppelausgabe wurde nach bestaetigter Abgabe blockiert.</span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Apotheken-Verlauf</p>
+                <h2>Dispense Log</h2>
+              </div>
+            </div>
+            <div className="stack-list">
+              {requestRecord.dispenseLogs.map((log) => (
+                <div key={log.id} className="stack-item">
+                  <strong>{log.eventType}</strong>
+                  <span>{log.pharmacy?.name ?? "System"}</span>
+                  <span>{log.eventNote ?? "ohne Zusatzinfo"}</span>
+                  <span>{formatDate(log.createdAt)}</span>
+                </div>
+              ))}
+            </div>
+          </article>
         </div>
+
+        <aside className="composer-sidebar">
+          <article className="panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Support</p>
+                <h2>Sanitized SWEX Tickets</h2>
+              </div>
+            </div>
+            <div className="stack-list">
+              {requestRecord.supportTickets.length === 0 ? (
+                <p className="muted-copy">Noch keine Supporttickets zu dieser Freigabe.</p>
+              ) : (
+                requestRecord.supportTickets.map((ticket) => (
+                  <div key={ticket.id} className="stack-item">
+                    <strong>{ticket.summary}</strong>
+                    <span>{ticket.component}</span>
+                    <span>{ticket.swexTicketRef}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </article>
+
+          <article className="panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Preview</p>
+                <h2>Gespeicherte Vorschau</h2>
+              </div>
+            </div>
+            <div className="stack-list">
+              {requestRecord.responses.map((response) => (
+                <div key={response.id} className="stack-item">
+                  <strong>{response.kind}</strong>
+                  <span>{JSON.stringify(response.payload)}</span>
+                </div>
+              ))}
+            </div>
+          </article>
+        </aside>
       </section>
     </main>
   );

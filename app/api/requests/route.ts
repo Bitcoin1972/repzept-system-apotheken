@@ -1,121 +1,127 @@
 import { NextResponse } from "next/server";
 import {
+  ConnectionVerificationStatus,
+  MedicationSource,
   PharmacyReleaseStatus,
-  Prisma,
   PrescriptionType,
+  RequestDistributionStatus,
   RequestStatus,
   SignatureStatus,
 } from "@prisma/client";
+
+import { ensurePracticeContext } from "@/lib/bootstrap";
 import { prisma } from "@/lib/prisma";
-import { parsePrescriptionText } from "@/lib/parsing";
-import { buildDemoResponses } from "@/lib/demo";
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as {
-    transcription?: string;
-    demoMode?: boolean;
-    productName?: string;
-    manufacturer?: string;
-    dosage?: string;
-    form?: string;
-    pzn?: string;
-    patientReference?: string;
-    quantity?: string;
-    doctorName?: string;
-    insuranceProvider?: string;
-    prescriptionType?: "RED" | "GREEN";
-    issuedAt?: string;
-    summary?: string;
-    medicationSource?: string;
-  };
+  const body = await request.json();
+  const context = await ensurePracticeContext();
+  const practiceId = body.practiceId ?? context.id;
+  const releasedByDoctorId = body.releasedByDoctorId ?? context.doctors[0]?.id ?? null;
 
-  const transcription = body.transcription?.trim() ?? "";
-
-  if (!transcription) {
-    return NextResponse.json(
-      { error: "transcription is required" },
-      {
-        status: 400,
-      },
-    );
-  }
-
-  const parsed = parsePrescriptionText(transcription);
-  const demoMode = Boolean(body.demoMode);
-  const productName = body.productName?.trim() ?? "";
-  const manufacturer = body.manufacturer?.trim() ?? "";
-  const dosage = body.dosage?.trim() ?? parsed.dosage;
-  const form = body.form?.trim() ?? "";
-  const pzn = body.pzn?.trim() ?? "";
-  const medicationName = productName || parsed.medicationName;
-  const patientReference = body.patientReference?.trim() ?? parsed.patientReference;
-  const quantity = body.quantity?.trim() ?? parsed.quantity;
-  const doctorName = body.doctorName?.trim() ?? "";
-  const insuranceProvider = body.insuranceProvider?.trim() ?? "";
-  const prescriptionType =
-    body.prescriptionType === "GREEN" ? PrescriptionType.GREEN : PrescriptionType.RED;
-  const issuedAt = body.issuedAt ? new Date(body.issuedAt) : new Date();
-  const releasedToPharmacyAt = new Date();
-  const summary =
-    body.summary?.trim() ??
-    [patientReference, medicationName, dosage, quantity].filter(Boolean).join(" · ");
-  const medicationSource = body.medicationSource?.trim() ?? "speech-plus-database";
-
-  try {
-    const created = await prisma.request.create({
-      data: {
-        status: RequestStatus.RELEASED,
-        transcription,
-        demoMode,
-        patientReference: patientReference || null,
-        medicationName: medicationName || null,
-        productName: productName || null,
-        manufacturer: manufacturer || null,
-        dosage: dosage || null,
-        form: form || null,
-        pzn: pzn || null,
-        quantity: quantity || null,
-        doctorName: doctorName || null,
-        insuranceProvider: insuranceProvider || null,
-        prescriptionType,
-        signatureStatus: SignatureStatus.SIGNED,
-        pharmacyReleaseStatus: PharmacyReleaseStatus.PRE_RELEASED,
-        normalFlowPending: true,
-        releasedToPharmacyAt,
-        signedBy: doctorName || "Unbekannter Arzt",
-        signedAt: releasedToPharmacyAt,
-        issuedAt,
-        medicationSource,
-        summary: summary || null,
-        responses: demoMode
-          ? {
-              create: buildDemoResponses(),
-            }
-          : undefined,
-      },
-      include: {
-        responses: true,
-      },
-    });
-
-    return NextResponse.json({
-      id: created.id,
-      status: created.status,
-    });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientInitializationError) {
-      return NextResponse.json(
-        {
-          error:
-            "PostgreSQL ist noch nicht bereit. Bitte Datenbank anlegen und Prisma-Migration ausfuehren.",
+  const practice = await prisma.practice.findUnique({
+    where: {
+      id: practiceId,
+    },
+    include: {
+      doctors: true,
+      pharmacyConnections: {
+        where: {
+          verificationStatus: ConnectionVerificationStatus.VERIFIED,
         },
-        { status: 503 },
-      );
-    }
+        include: {
+          pharmacy: true,
+        },
+      },
+    },
+  });
 
-    return NextResponse.json(
-      { error: "Request konnte nicht gespeichert werden." },
-      { status: 500 },
-    );
+  if (!practice) {
+    return NextResponse.json({ error: "Praxis nicht gefunden." }, { status: 404 });
   }
+
+  const now = new Date();
+  const outputText = body.outputText ?? body.output ?? body.transcription ?? "";
+  const summary =
+    body.summary ??
+    outputText
+      .split("\n")
+      .map((line: string) => line.trim())
+      .filter(Boolean)
+      .slice(0, 3)
+      .join(" ");
+
+  const requestRecord = await prisma.request.create({
+    data: {
+      practiceId: practice.id,
+      releasedByDoctorId,
+      doctorName:
+        body.doctorName ?? practice.doctors.find((doctor) => doctor.id === releasedByDoctorId)?.name ?? "Praxis",
+      insuranceProvider: body.insuranceProvider ?? null,
+      patientReference: body.patientReference ?? null,
+      prescriptionType:
+        (body.prescriptionType as PrescriptionType | undefined) ?? PrescriptionType.ACUTE,
+      status: RequestStatus.RELEASED,
+      signatureStatus: SignatureStatus.SIGNED,
+      pharmacyReleaseStatus:
+        practice.pharmacyConnections.length > 0
+          ? PharmacyReleaseStatus.PRE_RELEASED
+          : PharmacyReleaseStatus.NOT_RELEASED,
+      normalFlowPending: practice.pharmacyConnections.length > 0,
+      releasedToPharmacyAt: practice.pharmacyConnections.length > 0 ? now : null,
+      signedAt: now,
+      issuedAt: body.issuedAt ? new Date(body.issuedAt) : now,
+      summary: summary || null,
+      transcription: body.transcription ?? outputText,
+      outputText,
+      medicationName: body.medicationName ?? null,
+      medicationStrength: body.medicationStrength ?? null,
+      medicationPzn: body.medicationPzn ?? null,
+      medicationSource:
+        (body.medicationSource as MedicationSource | undefined) ?? MedicationSource.MANUAL_INPUT,
+      clinicalPayload: {
+        inputLanguage: body.inputLanguage ?? "Deutsch",
+        recipePreview: body.recipePreview ?? summary,
+        source: "practice_release_ui",
+      },
+      responses: {
+        create: {
+          kind: "release_preview",
+          payload: {
+            inputLanguage: body.inputLanguage ?? "Deutsch",
+            outputText,
+            summary,
+          },
+        },
+      },
+      requestDistributions: {
+        create: practice.pharmacyConnections.map((connection) => ({
+          pharmacyId: connection.pharmacyId,
+          connectionId: connection.id,
+          status: RequestDistributionStatus.RELEASED,
+          releasedAt: now,
+          note: "Vorabfreigabe an verbundene Apotheke. Normaler Rezeptweg folgt noch.",
+        })),
+      },
+      dispenseLogs: {
+        create: practice.pharmacyConnections.map((connection) => ({
+          pharmacyId: connection.pharmacyId,
+          eventType: "PRE_RELEASED",
+          eventNote: `Vorabfreigabe an ${connection.pharmacy.name}.`,
+        })),
+      },
+    },
+    include: {
+      practice: true,
+      releasedByDoctor: true,
+      requestDistributions: {
+        include: {
+          pharmacy: true,
+          connection: true,
+        },
+      },
+      responses: true,
+    },
+  });
+
+  return NextResponse.json(requestRecord, { status: 201 });
 }

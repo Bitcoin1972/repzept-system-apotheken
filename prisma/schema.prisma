@@ -7,26 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum PrescriptionType {
+  ACUTE
+  REPEAT
+  DISCHARGE
+  OTHER
+}
+
 enum RequestStatus {
   DRAFT
+  APPROVED
   RELEASED
-  ANSWERED
-  CLOSED
-}
-
-enum PharmacyResponseStatus {
-  AVAILABLE
-  ORDERABLE
-  UNAVAILABLE
-}
-
-enum PrescriptionType {
-  RED
-  GREEN
+  DISPENSED
+  COMPLETED
 }
 
 enum SignatureStatus {
-  DRAFT
+  PENDING
   SIGNED
 }
 
@@ -36,44 +33,217 @@ enum PharmacyReleaseStatus {
   STANDARD_FLOW_COMPLETED
 }
 
+enum MedicationSource {
+  MANUAL_INPUT
+  PMS_CATALOG
+  EXTERNAL_API
+}
+
+enum CatalogSource {
+  PMS_CATALOG
+  EXTERNAL_API
+}
+
+enum PmsType {
+  GENERIC_PMS
+  INTERNAL_CATALOG_API
+  EXTERNAL_E_PRESCRIPTION
+}
+
+enum ConnectionVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum RequestDistributionStatus {
+  RELEASED
+  VIEWED
+  IN_PROGRESS
+  DISPENSED
+  BLOCKED_DUPLICATE
+}
+
+enum SupportRole {
+  PRACTICE
+  PHARMACY
+}
+
+enum SupportComponent {
+  PMS_CONNECTOR
+  CATALOG_API
+  PHARMACY_CONNECTION
+  STRIPE_SYNC
+  RELEASE_FLOW
+  SUPPORT_UI
+}
+
+enum SupportSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Practice {
+  id                   String                      @id @default(cuid())
+  name                 String
+  pmsType              PmsType                     @default(GENERIC_PMS)
+  pmsSystemLabel       String?
+  pmsApiBaseUrl        String?
+  pmsApiKeyMasked      String?
+  catalogSource        CatalogSource               @default(PMS_CATALOG)
+  stripeCustomerRef    String?
+  stripeSubscriptionRef String?
+  swexTenantRef        String?
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+  doctors              DoctorUser[]
+  requests             Request[]
+  pharmacyConnections  PracticePharmacyConnection[]
+  supportTickets       SupportTicket[]
+}
+
+model DoctorUser {
+  id               String    @id @default(cuid())
+  practiceId       String
+  name             String
+  email            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  practice         Practice  @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  releasedRequests Request[] @relation("ReleasedByDoctor")
+}
+
+model PharmacyAccount {
+  id                 String                      @id @default(cuid())
+  name               String
+  email              String?
+  contactPhone       String?
+  verificationCode   String                      @unique
+  stripeCustomerRef  String?
+  swexTenantRef      String?
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
+  practiceConnections PracticePharmacyConnection[]
+  requestDistributions RequestDistribution[]
+  dispenseLogs       DispenseLog[]
+  supportTickets     SupportTicket[]
+}
+
+model PracticePharmacyConnection {
+  id                       String                        @id @default(cuid())
+  practiceId               String
+  pharmacyId               String
+  pharmacyVerificationCode String
+  verificationStatus       ConnectionVerificationStatus  @default(PENDING)
+  connectedAt              DateTime?
+  verifiedByAiAt           DateTime?
+  createdAt                DateTime                      @default(now())
+  updatedAt                DateTime                      @updatedAt
+  practice                 Practice                      @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  pharmacy                 PharmacyAccount               @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  requestDistributions     RequestDistribution[]
+  supportTickets           SupportTicket[]
+
+  @@unique([practiceId, pharmacyId])
+}
+
 model Request {
   id                    String                @id @default(cuid())
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  status                RequestStatus         @default(DRAFT)
-  transcription         String
-  demoMode              Boolean               @default(false)
+  practiceId            String?
+  releasedByDoctorId    String?
+  doctorName            String
+  insuranceProvider     String?
   patientReference      String?
-  medicationName        String?
-  productName           String?
-  manufacturer          String?
-  dosage                String?
-  form                  String?
-  pzn                   String?
-  quantity              String?
-  doctorName            String?
-  insuranceProvider String?
-  prescriptionType      PrescriptionType      @default(RED)
-  signatureStatus       SignatureStatus       @default(DRAFT)
+  prescriptionType      PrescriptionType      @default(ACUTE)
+  status                RequestStatus         @default(APPROVED)
+  signatureStatus       SignatureStatus       @default(SIGNED)
   pharmacyReleaseStatus PharmacyReleaseStatus @default(NOT_RELEASED)
   normalFlowPending     Boolean               @default(false)
   releasedToPharmacyAt  DateTime?
-  signedBy              String?
   signedAt              DateTime?
-  issuedAt              DateTime?
-  medicationSource      String?
+  issuedAt              DateTime              @default(now())
   summary               String?
-  responses             PharmacyResponse[]
+  transcription         String?
+  outputText            String?
+  medicationName        String?
+  medicationStrength    String?
+  medicationPzn         String?
+  medicationSource      MedicationSource      @default(MANUAL_INPUT)
+  clinicalPayload       Json?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  practice              Practice?             @relation(fields: [practiceId], references: [id], onDelete: SetNull)
+  releasedByDoctor      DoctorUser?           @relation("ReleasedByDoctor", fields: [releasedByDoctorId], references: [id], onDelete: SetNull)
+  responses             Response[]
+  requestDistributions  RequestDistribution[]
+  dispenseLogs          DispenseLog[]
+  supportTickets        SupportTicket[]
 }
 
-model PharmacyResponse {
-  id             String                 @id @default(cuid())
-  createdAt      DateTime               @default(now())
-  requestId      String
-  pharmacyName   String
-  responseStatus PharmacyResponseStatus
-  message        String
-  request        Request                @relation(fields: [requestId], references: [id], onDelete: Cascade)
+model Response {
+  id        String   @id @default(cuid())
+  requestId String
+  kind      String
+  payload   Json
+  createdAt DateTime @default(now())
+  request   Request  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
 
-  @@index([requestId])
+model RequestDistribution {
+  id                 String                    @id @default(cuid())
+  requestId          String
+  pharmacyId         String
+  connectionId       String
+  status             RequestDistributionStatus @default(RELEASED)
+  releasedAt         DateTime                  @default(now())
+  viewedAt           DateTime?
+  processingStartedAt DateTime?
+  dispensedAt        DateTime?
+  blockedAt          DateTime?
+  note               String?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  request            Request                   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  pharmacy           PharmacyAccount           @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  connection         PracticePharmacyConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  dispenseLogs       DispenseLog[]
+}
+
+model DispenseLog {
+  id             String               @id @default(cuid())
+  requestId      String
+  pharmacyId     String?
+  distributionId String?
+  eventType      String
+  eventNote      String?
+  createdAt      DateTime             @default(now())
+  request        Request              @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  pharmacy       PharmacyAccount?     @relation(fields: [pharmacyId], references: [id], onDelete: SetNull)
+  distribution   RequestDistribution? @relation(fields: [distributionId], references: [id], onDelete: SetNull)
+}
+
+model SupportTicket {
+  id                 String                    @id @default(cuid())
+  practiceId         String?
+  pharmacyId         String?
+  requestId          String?
+  connectionId       String?
+  role               SupportRole
+  component          SupportComponent
+  severity           SupportSeverity          @default(MEDIUM)
+  category           String
+  technicalSignature String
+  summary            String
+  internalMessage    String
+  internalContext    Json?
+  swexPayload        Json
+  swexTicketRef      String
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  practice           Practice?                @relation(fields: [practiceId], references: [id], onDelete: SetNull)
+  pharmacy           PharmacyAccount?         @relation(fields: [pharmacyId], references: [id], onDelete: SetNull)
+  request            Request?                 @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  connection         PracticePharmacyConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
 }
