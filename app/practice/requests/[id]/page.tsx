@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PharmacyReleaseStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 type PageProps = {
@@ -26,6 +27,17 @@ export default async function PracticeRequestDetailPage({ params }: PageProps) {
     notFound();
   }
 
+  const pharmacyReleaseLabel =
+    request.pharmacyReleaseStatus === PharmacyReleaseStatus.PRE_RELEASED
+      ? "Vorab freigegeben"
+      : request.pharmacyReleaseStatus === PharmacyReleaseStatus.STANDARD_FLOW_COMPLETED
+        ? "Regulaerer Weg abgeschlossen"
+        : "Noch nicht freigegeben";
+
+  const normalFlowLabel = request.normalFlowPending
+    ? "Regulaerer Weg folgt noch"
+    : "Regulaerer Weg abgeschlossen";
+
   return (
     <main className="page-shell stack">
       <section className="hero-card">
@@ -34,11 +46,13 @@ export default async function PracticeRequestDetailPage({ params }: PageProps) {
           Rezept freigabesigniert von {request.signedBy || request.doctorName || "Dr. ..."}
         </h1>
         <p className="hero-copy">
-          Die Apotheke sieht den signierten Rezeptdatensatz mit Verordnungsdetails, Rezepttyp
-          und uebernommenen Medikamentendaten unmittelbar nach der Freigabe.
+          Die Apotheke sieht sofort, dass dieses Rezept bereits vorab freigegeben wurde,
+          welchen Rezepttyp es hat und dass der regulaere Weg spaeter noch folgt.
         </p>
         <div className="row">
           <span className="status-pill">Status: {request.status}</span>
+          <span className="status-pill">Apothekenfreigabe: {pharmacyReleaseLabel}</span>
+          <span className="status-pill">Weiterer Ablauf: {normalFlowLabel}</span>
           <span className="status-pill">Signatur: {request.signatureStatus}</span>
           <span className="status-pill">Typ: {request.prescriptionType}</span>
           <span className="status-pill">
@@ -63,6 +77,14 @@ export default async function PracticeRequestDetailPage({ params }: PageProps) {
         </div>
         <div className="preview-grid">
           <div className="preview-item">
+            <dt>Apothekenstatus</dt>
+            <dd>{pharmacyReleaseLabel}</dd>
+          </div>
+          <div className="preview-item">
+            <dt>Weiterer Ablauf</dt>
+            <dd>{normalFlowLabel}</dd>
+          </div>
+          <div className="preview-item">
             <dt>Arzt</dt>
             <dd>{request.doctorName || "-"}</dd>
           </div>
@@ -78,8 +100,22 @@ export default async function PracticeRequestDetailPage({ params }: PageProps) {
             <dt>Datenquelle</dt>
             <dd>{request.medicationSource || "-"}</dd>
           </div>
+          <div className="preview-item">
+            <dt>Freigegeben an Apotheke</dt>
+            <dd>
+              {request.releasedToPharmacyAt
+                ? new Date(request.releasedToPharmacyAt).toLocaleString("de-DE")
+                : "-"}
+            </dd>
+          </div>
         </div>
         <p>{request.summary || "Keine automatische Zusammenfassung gespeichert."}</p>
+        {request.normalFlowPending ? (
+          <p className="pharmacy-warning-banner">
+            Hinweis fuer die Apotheke: Dieses Rezept wurde bereits vorab freigegeben. Der
+            regulaere Einloese- und Abgabeweg folgt noch und darf nicht doppelt bedient werden.
+          </p>
+        ) : null}
       </section>
 
       <section className="panel stack">

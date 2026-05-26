@@ -424,7 +424,8 @@ export function PracticeComposer() {
               <p className="prescription-card-kicker">{titleizePrescriptionType(prescriptionType)}</p>
               <h3>Freigabesigniert von {doctorName || "Dr. ..."}</h3>
               <p className="prescription-card-subtitle">
-                Apothekensicht: signierter Rezeptdatensatz mit uebernommenen Medikamentendaten.
+                Apothekensicht: vorab freigegebener Rezeptdatensatz. Der regulaere Weg folgt
+                danach weiter.
               </p>
             </div>
             <div className="prescription-card-badge">
@@ -496,7 +497,7 @@ export function PracticeComposer() {
           </section>
 
           <footer className="prescription-card-footer">
-            <span>Systemstatus: an Apotheke freigabesigniert uebergabefaehig</span>
+            <span>Systemstatus: an Apotheke vorab freigegeben, regulaerer Weg noch ausstehend</span>
             <span>Quelle: {selectedProductId ? "Medikamentendatenbank" : autoMatchedProduct ? "Automatischer Datenbanktreffer" : "Diktat ohne Match"}</span>
           </footer>
         </article>
@@ -506,7 +507,7 @@ export function PracticeComposer() {
         {error ? <p className="error-text">{error}</p> : null}
         <div className="row">
           <p className="helper-text">
-            Beim Freigeben wird der Datensatz signiert gespeichert. Die weiteren Schritte laufen danach ohne zusaetzliche Eingaben weiter.
+            Beim Freigeben wird fuer die Apotheke gespeichert, dass das Rezept bereits vorab freigegeben ist. Der regulaere Ablauf laeuft danach weiter, damit keine Doppelausgabe passiert.
           </p>
           <button
             className="primary-button"

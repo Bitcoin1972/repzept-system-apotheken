@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  PharmacyReleaseStatus,
   Prisma,
   PrescriptionType,
   RequestStatus,
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
   const prescriptionType =
     body.prescriptionType === "GREEN" ? PrescriptionType.GREEN : PrescriptionType.RED;
   const issuedAt = body.issuedAt ? new Date(body.issuedAt) : new Date();
+  const releasedToPharmacyAt = new Date();
   const summary =
     body.summary?.trim() ??
     [patientReference, medicationName, dosage, quantity].filter(Boolean).join(" · ");
@@ -77,8 +79,11 @@ export async function POST(request: Request) {
         insuranceProvider: insuranceProvider || null,
         prescriptionType,
         signatureStatus: SignatureStatus.SIGNED,
+        pharmacyReleaseStatus: PharmacyReleaseStatus.PRE_RELEASED,
+        normalFlowPending: true,
+        releasedToPharmacyAt,
         signedBy: doctorName || "Unbekannter Arzt",
-        signedAt: new Date(),
+        signedAt: releasedToPharmacyAt,
         issuedAt,
         medicationSource,
         summary: summary || null,

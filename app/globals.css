@@ -442,6 +442,17 @@ textarea {
   color: var(--danger);
 }
 
+.pharmacy-warning-banner {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(185, 28, 28, 0.18);
+  background: rgba(185, 28, 28, 0.08);
+  color: #7f1d1d;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
 .print-hidden {
   display: block;
 }

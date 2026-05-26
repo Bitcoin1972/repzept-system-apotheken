@@ -1,9 +1,11 @@
 .next
 node_modules
 .npm-cache
+_npm_cache_disabled
 .env
 .env.local
 coverage
 dist
 *.log
 prisma/dev.db
+tsconfig.tsbuildinfo
