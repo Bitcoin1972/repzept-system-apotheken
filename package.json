@@ -5,6 +5,7 @@
   "scripts": {
     "setup": "npm install && npm run prisma:generate",
     "start:local": "sh ./scripts/start-local.sh",
+    "seed:demo-auth": "node ./scripts/seed-demo-auth.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

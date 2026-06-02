@@ -114,6 +114,15 @@ export default async function PracticeRequestPage({ params }: PageContext) {
   const pickupEmailDelivery = requestRecord.responses.find(
     (response) => response.kind === "pickup_email_delivery",
   );
+  const pickupEmailDeliveryPayload =
+    pickupEmailDelivery && pickupEmailDelivery.payload && typeof pickupEmailDelivery.payload === "object"
+      ? (pickupEmailDelivery.payload as {
+          status?: string;
+          skipped?: boolean;
+          reason?: string;
+          messageId?: string;
+        })
+      : null;
 
   return (
     <main className="workspace-shell">
@@ -255,7 +264,13 @@ export default async function PracticeRequestPage({ params }: PageContext) {
                 {pickupEmailDelivery ? (
                   <div className="stack-item">
                     <strong>Versandstatus</strong>
-                    <span>{JSON.stringify(pickupEmailDelivery.payload)}</span>
+                    <span>
+                      {pickupEmailDeliveryPayload?.status === "sent"
+                        ? "versendet"
+                        : pickupEmailDeliveryPayload?.skipped
+                          ? `nicht versendet${pickupEmailDeliveryPayload?.reason ? ` (${pickupEmailDeliveryPayload.reason})` : ""}`
+                          : "vorbereitet"}
+                    </span>
                   </div>
                 ) : null}
               </div>
@@ -283,23 +298,6 @@ export default async function PracticeRequestPage({ params }: PageContext) {
                   </div>
                 ))
               )}
-            </div>
-          </article>
-
-          <article className="panel">
-            <div className="panel-header">
-              <div>
-                <p className="eyebrow">Preview</p>
-                <h2>Gespeicherte Vorschau</h2>
-              </div>
-            </div>
-            <div className="stack-list">
-              {requestRecord.responses.map((response) => (
-                <div key={response.id} className="stack-item">
-                  <strong>{response.kind}</strong>
-                  <span>{JSON.stringify(response.payload)}</span>
-                </div>
-              ))}
             </div>
           </article>
         </aside>

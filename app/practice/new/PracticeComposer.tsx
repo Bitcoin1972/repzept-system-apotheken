@@ -232,6 +232,9 @@ export function PracticeComposer(props: PracticeComposerProps) {
           <Link href="/pharmacy" className="secondary-link">
             Apotheker-Ansicht
           </Link>
+          <Link href="/logout" className="secondary-link">
+            Abmelden
+          </Link>
         </div>
       </section>
 

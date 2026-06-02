@@ -338,6 +338,9 @@ export function PharmacyWorkspace(props: PharmacyWorkspaceProps) {
           <Link href="/practice/setup" className="secondary-link">
             Praxis-Setup
           </Link>
+          <Link href="/logout" className="secondary-link">
+            Abmelden
+          </Link>
         </div>
       </section>
 
