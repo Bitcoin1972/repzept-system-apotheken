@@ -2,6 +2,8 @@ import { getPracticeDashboardContext } from "@/lib/bootstrap";
 
 import { PracticeSetupWorkspace } from "./PracticeSetupWorkspace";
 
+export const dynamic = "force-dynamic";
+
 export default async function PracticeSetupPage() {
   const context = await getPracticeDashboardContext();
 

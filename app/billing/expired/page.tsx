@@ -3,6 +3,8 @@ import Link from "next/link";
 import { ensurePracticeContext } from "@/lib/bootstrap";
 import { getPracticeAccessState } from "@/lib/practice-access";
 
+export const dynamic = "force-dynamic";
+
 function formatDate(value?: Date | null) {
   if (!value) {
     return "nicht gesetzt";

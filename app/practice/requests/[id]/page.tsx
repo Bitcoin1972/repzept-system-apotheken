@@ -20,6 +20,8 @@ type PageContext = {
   }>;
 };
 
+export const dynamic = "force-dynamic";
+
 function formatDate(value?: Date | null) {
   if (!value) {
     return "offen";

@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 
 import { PharmacyWorkspace } from "./PharmacyWorkspace";
 
+export const dynamic = "force-dynamic";
+
 export default async function PharmacyPage() {
   const practice = await ensurePracticeContext();
   const access = getPracticeAccessState(practice);
