@@ -62,6 +62,23 @@ type PracticeComposerProps = {
 };
 
 type RecipeFormType = "GKV_MUSTER16" | "GREEN" | "PRIVATE" | "BTM" | "T_REZEPT";
+type MedicationResolveResponse = {
+  parsed: {
+    patientReference: string;
+    medicationName: string;
+    dosage: string;
+    quantity: string;
+    form: string;
+  } | null;
+  suggestion: {
+    medicationName: string;
+    medicationStrength: string;
+    medicationPzn: string;
+    source: "PMS_CATALOG" | "EXTERNAL_API" | "DEMO_CATALOG" | "TEXT_PARSE";
+    confidence: "high" | "medium" | "low";
+    matchedBy: "exact" | "contains" | "fuzzy" | "parse_only";
+  } | null;
+};
 
 type BrowserSpeechRecognition = {
   continuous: boolean;
@@ -125,6 +142,9 @@ export function PracticeComposer(props: PracticeComposerProps) {
   const [recipeFlags, setRecipeFlags] = useState(defaultRecipeFlags);
   const [medication, setMedication] = useState(defaultMedication);
   const [medicationDraft, setMedicationDraft] = useState(defaultMedication);
+  const [medicationMode, setMedicationMode] = useState<"auto" | "manual">("auto");
+  const [medicationResolveState, setMedicationResolveState] = useState<"idle" | "resolving" | "done" | "error">("idle");
+  const [medicationResolveHint, setMedicationResolveHint] = useState("");
   const [showMedicationPicker, setShowMedicationPicker] = useState(false);
   const [releaseState, setReleaseState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [releasedRequestId, setReleasedRequestId] = useState<string | null>(null);
@@ -133,6 +153,7 @@ export function PracticeComposer(props: PracticeComposerProps) {
   const [supportState, setSupportState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const finalTranscriptRef = useRef("");
+  const resolveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -202,6 +223,86 @@ export function PracticeComposer(props: PracticeComposerProps) {
     setIsRecording(false);
     setDictationState("idle");
   }
+
+  async function resolveMedicationSuggestion(text: string) {
+    if (!text.trim() || medicationMode === "manual") {
+      return;
+    }
+
+    setMedicationResolveState("resolving");
+
+    try {
+      const response = await fetch("/api/practice/medication-resolve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          outputText: text,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Medikament konnte nicht aufgeloest werden.");
+      }
+
+      const payload = (await response.json()) as MedicationResolveResponse;
+
+      if (!payload.suggestion?.medicationName) {
+        setMedication(defaultMedication);
+        setMedicationResolveState("idle");
+        setMedicationResolveHint("");
+        return;
+      }
+
+      setMedication({
+        medicationName: payload.suggestion.medicationName,
+        medicationStrength: payload.suggestion.medicationStrength,
+        medicationPzn: payload.suggestion.medicationPzn,
+      });
+      setMedicationDraft({
+        medicationName: payload.suggestion.medicationName,
+        medicationStrength: payload.suggestion.medicationStrength,
+        medicationPzn: payload.suggestion.medicationPzn,
+      });
+      setMedicationResolveState("done");
+      setMedicationResolveHint(
+        payload.suggestion.confidence === "low"
+          ? "Medikation grob aus dem Freitext erkannt. Bitte pruefen oder bei Bedarf manuell auswaehlen."
+          : `Medikation automatisch erkannt (${payload.suggestion.source}).`,
+      );
+    } catch {
+      setMedicationResolveState("error");
+      setMedicationResolveHint("Automatische Medikamentenerkennung war nicht moeglich. Bitte manuell pruefen.");
+    }
+  }
+
+  useEffect(() => {
+    if (medicationMode === "manual") {
+      return;
+    }
+
+    if (resolveTimeoutRef.current) {
+      clearTimeout(resolveTimeoutRef.current);
+    }
+
+    if (!outputText.trim()) {
+      setMedication(defaultMedication);
+      setMedicationResolveState("idle");
+      setMedicationResolveHint("");
+      return;
+    }
+
+    resolveTimeoutRef.current = setTimeout(() => {
+      void resolveMedicationSuggestion(outputText);
+    }, 700);
+
+    return () => {
+      if (resolveTimeoutRef.current) {
+        clearTimeout(resolveTimeoutRef.current);
+      }
+    };
+  }, [outputText, medicationMode]);
 
   function startDictation() {
     if (typeof window === "undefined") {
@@ -319,6 +420,11 @@ export function PracticeComposer(props: PracticeComposerProps) {
       setReleaseState("done");
       setOutputText("");
       setPatientEmail("");
+      setMedication(defaultMedication);
+      setMedicationDraft(defaultMedication);
+      setMedicationMode("auto");
+      setMedicationResolveState("idle");
+      setMedicationResolveHint("");
     } catch {
       setReleaseState("error");
     }
@@ -590,6 +696,13 @@ export function PracticeComposer(props: PracticeComposerProps) {
                   </button>
                 </div>
                 <pre>{recipePreview}</pre>
+                {medicationResolveHint ? (
+                  <div className={`release-banner ${medicationResolveState === "error" ? "warning" : ""}`}>
+                    {medicationResolveState === "resolving"
+                      ? "Medikation wird aus Diktat und Katalog aufgeloest..."
+                      : medicationResolveHint}
+                  </div>
+                ) : null}
                 <div className="release-banner">
                   Die verbundene Apotheke sieht sofort, dass dieses Rezept bereits freigegeben ist.
                   Der normale Weg bleibt bis zur bestaetigten Abgabe als offen markiert.
@@ -784,6 +897,9 @@ export function PracticeComposer(props: PracticeComposerProps) {
                 className="primary-button"
                 onClick={() => {
                   setMedication(medicationDraft);
+                  setMedicationMode("manual");
+                  setMedicationResolveState("done");
+                  setMedicationResolveHint("Medikation wurde manuell gesetzt.");
                   setShowMedicationPicker(false);
                 }}
               >
