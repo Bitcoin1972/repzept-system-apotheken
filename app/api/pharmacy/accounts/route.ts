@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { AuthRole } from "@prisma/client";
 
+import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 function buildVerificationCode(name: string) {
@@ -9,7 +11,13 @@ function buildVerificationCode(name: string) {
 }
 
 export async function GET() {
+  const user = await requireRole([AuthRole.PHARMACY_USER]);
   const pharmacies = await prisma.pharmacyAccount.findMany({
+    where: user.pharmacyAccountId
+      ? {
+          id: user.pharmacyAccountId,
+        }
+      : undefined,
     include: {
       practiceConnections: {
         include: {
@@ -26,6 +34,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  await requireRole([AuthRole.PHARMACY_USER]);
   const body = await request.json();
 
   const pharmacy = await prisma.pharmacyAccount.create({

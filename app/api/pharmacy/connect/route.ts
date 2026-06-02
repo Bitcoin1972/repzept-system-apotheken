@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
-import { ConnectionVerificationStatus } from "@prisma/client";
+import { AuthRole, ConnectionVerificationStatus } from "@prisma/client";
 
+import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
+  const user = await requireRole([AuthRole.PHARMACY_USER]);
   const body = await request.json();
+  const pharmacyId = user.pharmacyAccountId ?? body.pharmacyId;
 
-  if (!body.practiceId || !body.pharmacyId || !body.verificationCode) {
+  if (!body.practiceId || !pharmacyId || !body.verificationCode) {
     return NextResponse.json(
       { error: "practiceId, pharmacyId und verificationCode sind erforderlich." },
       { status: 400 },
@@ -21,7 +24,7 @@ export async function POST(request: Request) {
     }),
     prisma.pharmacyAccount.findUnique({
       where: {
-        id: body.pharmacyId,
+        id: pharmacyId,
       },
     }),
   ]);
@@ -49,6 +52,7 @@ export async function POST(request: Request) {
     update: {
       pharmacyVerificationCode: pharmacy.verificationCode,
       verificationStatus: ConnectionVerificationStatus.VERIFIED,
+      verificationReason: "Kennung, Session-Konto und Apotheke wurden regelbasiert bestaetigt.",
       connectedAt: new Date(),
       verifiedByAiAt: new Date(),
     },
@@ -57,6 +61,7 @@ export async function POST(request: Request) {
       pharmacyId: pharmacy.id,
       pharmacyVerificationCode: pharmacy.verificationCode,
       verificationStatus: ConnectionVerificationStatus.VERIFIED,
+      verificationReason: "Kennung, Session-Konto und Apotheke wurden regelbasiert bestaetigt.",
       connectedAt: new Date(),
       verifiedByAiAt: new Date(),
     },

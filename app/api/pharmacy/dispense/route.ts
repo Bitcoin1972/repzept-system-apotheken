@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
-import { PharmacyReleaseStatus, RequestDistributionStatus, RequestStatus } from "@prisma/client";
+import {
+  AuthRole,
+  PharmacyReleaseStatus,
+  RequestDistributionStatus,
+  RequestStatus,
+} from "@prisma/client";
 
+import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type DispenseAction = "viewed" | "in_progress" | "dispensed";
@@ -18,6 +24,7 @@ function mapActionToStatus(action: DispenseAction) {
 }
 
 export async function POST(request: Request) {
+  const user = await requireRole([AuthRole.PHARMACY_USER]);
   const body = await request.json();
   const action = body.action as DispenseAction;
 
@@ -39,6 +46,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Distribution nicht gefunden." }, { status: 404 });
   }
 
+  if (!user.pharmacyAccountId || distribution.pharmacyId !== user.pharmacyAccountId) {
+    return NextResponse.json({ error: "Diese Freigabe gehoert nicht zu Ihrem Apothekenkonto." }, { status: 403 });
+  }
+
   const now = new Date();
 
   if (action === "dispensed") {
@@ -50,6 +61,7 @@ export async function POST(request: Request) {
         data: {
           status: RequestDistributionStatus.DISPENSED,
           dispensedAt: now,
+          dispensedByUserId: user.id,
           note: body.note ?? distribution.note,
         },
       });
@@ -89,12 +101,18 @@ export async function POST(request: Request) {
             distributionId: distribution.id,
             eventType: "DISPENSED",
             eventNote: body.note ?? "Apotheke hat die Abgabe bestaetigt.",
+            actorUserId: user.id,
+            actorEmail: user.email,
+            actorRole: user.role,
           },
           {
             requestId: distribution.requestId,
             distributionId: distribution.id,
             eventType: "NORMAL_FLOW_CLOSED",
             eventNote: "Andere Ausgabepfade werden jetzt gegen Doppelausgabe blockiert.",
+            actorUserId: user.id,
+            actorEmail: user.email,
+            actorRole: user.role,
           },
         ],
       });
@@ -113,6 +131,8 @@ export async function POST(request: Request) {
       status: mapActionToStatus(action),
       viewedAt: action === "viewed" ? now : distribution.viewedAt,
       processingStartedAt: action === "in_progress" ? now : distribution.processingStartedAt,
+      viewedByUserId: action === "viewed" ? user.id : distribution.viewedByUserId,
+      processingByUserId: action === "in_progress" ? user.id : distribution.processingByUserId,
       note: body.note ?? distribution.note,
     },
   });
@@ -128,6 +148,9 @@ export async function POST(request: Request) {
         (action === "viewed"
           ? "Apotheke hat die Freigabe gesichtet."
           : "Apotheke bearbeitet die Freigabe."),
+      actorUserId: user.id,
+      actorEmail: user.email,
+      actorRole: user.role,
     },
   });
 

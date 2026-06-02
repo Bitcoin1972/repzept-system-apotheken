@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  AuthRole,
   ConnectionVerificationStatus,
   PharmacyReleaseStatus,
   PrescriptionType,
@@ -9,17 +10,23 @@ import {
   SignatureStatus,
 } from "@prisma/client";
 
-import { ensurePracticeContext } from "@/lib/bootstrap";
+import { requireRole } from "@/lib/auth";
 import { sendPickupNotificationEmail } from "@/lib/integrations/mailer";
 import { buildPickupNotification } from "@/lib/pickup-notification";
 import { getPracticeAccessState } from "@/lib/practice-access";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
+  const user = await requireRole([AuthRole.PRACTICE_ADMIN, AuthRole.DOCTOR_USER]);
   const body = await request.json();
-  const context = await ensurePracticeContext();
-  const practiceId = body.practiceId ?? context.id;
-  const releasedByDoctorId = body.releasedByDoctorId ?? context.doctors[0]?.id ?? null;
+  const practiceId = user.practiceId;
+
+  if (!practiceId) {
+    return NextResponse.json({ error: "Kein Praxiskonto hinterlegt." }, { status: 400 });
+  }
+
+  const releasedByDoctorId =
+    user.role === AuthRole.DOCTOR_USER ? user.doctorUserId ?? null : body.releasedByDoctorId ?? null;
 
   const practice = await prisma.practice.findUnique({
     where: {
@@ -165,12 +172,18 @@ export async function POST(request: Request) {
             pharmacyId: connection.pharmacyId,
             eventType: "PRE_RELEASED",
             eventNote: `Vorabfreigabe an ${connection.pharmacy.name}.`,
+            actorUserId: user.id,
+            actorEmail: user.email,
+            actorRole: user.role,
           })),
           ...(pickupNotification?.to
             ? [
                 {
                   eventType: "PATIENT_NOTIFICATION_PREPARED",
                   eventNote: `Abholbenachrichtigung fuer ${pickupNotification.to} vorbereitet.`,
+                  actorUserId: user.id,
+                  actorEmail: user.email,
+                  actorRole: user.role,
                 },
               ]
             : []),
@@ -245,6 +258,9 @@ export async function POST(request: Request) {
           deliveryResult.status === "sent"
             ? `Abholbenachrichtigung an ${pickupNotification.to} versendet.`
             : deliveryResult.reason,
+        actorUserId: user.id,
+        actorEmail: user.email,
+        actorRole: user.role,
       },
     });
   }

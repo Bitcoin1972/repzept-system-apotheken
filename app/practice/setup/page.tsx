@@ -1,3 +1,7 @@
+import { AuthRole } from "@prisma/client";
+import { redirect } from "next/navigation";
+
+import { requireRole } from "@/lib/auth";
 import { getPracticeDashboardContext } from "@/lib/bootstrap";
 
 import { PracticeSetupWorkspace } from "./PracticeSetupWorkspace";
@@ -5,7 +9,16 @@ import { PracticeSetupWorkspace } from "./PracticeSetupWorkspace";
 export const dynamic = "force-dynamic";
 
 export default async function PracticeSetupPage() {
-  const context = await getPracticeDashboardContext();
+  const user = await requireRole([AuthRole.PRACTICE_ADMIN, AuthRole.DOCTOR_USER]);
+
+  if (user.role !== AuthRole.PRACTICE_ADMIN) {
+    redirect("/practice/new");
+  }
+
+  const context = await getPracticeDashboardContext({
+    practiceId: user.practiceId ?? undefined,
+    activeDoctorId: user.doctorUserId,
+  });
 
   return (
     <PracticeSetupWorkspace

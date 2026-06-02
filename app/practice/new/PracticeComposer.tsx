@@ -223,6 +223,9 @@ export function PracticeComposer(props: PracticeComposerProps) {
           </p>
         </div>
         <div className="hero-actions">
+          <Link href="/practice/requests" className="secondary-link">
+            Arzt-Nachverfolgung
+          </Link>
           <Link href="/practice/setup" className="secondary-link">
             Praxis-Setup
           </Link>
@@ -531,6 +534,9 @@ export function PracticeComposer(props: PracticeComposerProps) {
                 <p className="eyebrow">Verlauf</p>
                 <h2>Letzte Freigaben</h2>
               </div>
+              <Link href="/practice/requests" className="secondary-link">
+                Alle Freigaben
+              </Link>
             </div>
             <div className="stack-list">
               {props.recentRequests.length === 0 ? (

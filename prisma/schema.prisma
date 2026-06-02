@@ -92,6 +92,39 @@ enum SupportSeverity {
   CRITICAL
 }
 
+enum AuthRole {
+  PRACTICE_ADMIN
+  DOCTOR_USER
+  PHARMACY_USER
+}
+
+enum PharmacyPlan {
+  SMALL
+  STANDARD
+  NETWORK
+}
+
+enum SubscriptionStatus {
+  INACTIVE
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PREPARED
+  ISSUED
+  PAID
+  VOID
+}
+
+enum SwexEntityType {
+  PRACTICE
+  PHARMACY
+}
+
 model Practice {
   id                   String                      @id @default(cuid())
   name                 String
@@ -115,6 +148,7 @@ model Practice {
   stripeSubscriptionRef String?
   stripeCheckoutUrl    String?
   swexTenantRef        String?
+  swexCustomerRef      String?
   renderWorkspaceSlug  String?
   renderServiceName    String?
   copyToOwnRenderOnActivation Boolean              @default(false)
@@ -125,6 +159,9 @@ model Practice {
   pharmacyConnections  PracticePharmacyConnection[]
   supportTickets       SupportTicket[]
   stripePayments       StripePaymentRecord[]
+  swexCustomers        SwexCustomerLink[]
+  swexOrders           SwexOrderSync[]
+  authUsers            AuthUser[]
 }
 
 model DoctorUser {
@@ -136,6 +173,7 @@ model DoctorUser {
   updatedAt        DateTime  @updatedAt
   practice         Practice  @relation(fields: [practiceId], references: [id], onDelete: Cascade)
   releasedRequests Request[] @relation("ReleasedByDoctor")
+  authUsers        AuthUser[]
 }
 
 model PharmacyAccount {
@@ -150,7 +188,16 @@ model PharmacyAccount {
   longitude          Float?
   verificationCode   String                      @unique
   stripeCustomerRef  String?
+  billingEmail       String?
   swexTenantRef      String?
+  swexCustomerRef    String?
+  plan               PharmacyPlan                @default(SMALL)
+  monthlyPriceCents  Int                         @default(9900)
+  subscriptionStatus SubscriptionStatus          @default(INACTIVE)
+  stripeSubscriptionRef String?
+  stripeLatestInvoiceRef String?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
   createdAt          DateTime                    @default(now())
   updatedAt          DateTime                    @updatedAt
   practiceConnections PracticePharmacyConnection[]
@@ -158,6 +205,45 @@ model PharmacyAccount {
   dispenseLogs       DispenseLog[]
   supportTickets     SupportTicket[]
   stripePayments     StripePaymentRecord[]
+  swexCustomers      SwexCustomerLink[]
+  swexOrders         SwexOrderSync[]
+  authUsers          AuthUser[]
+  usageSnapshots     PharmacyUsageSnapshot[]
+  invoices           PharmacyInvoice[]
+}
+
+model AuthUser {
+  id                String           @id @default(cuid())
+  email             String           @unique
+  passwordHash      String
+  role              AuthRole
+  displayName       String
+  practiceId        String?
+  doctorUserId      String?
+  pharmacyAccountId String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  practice          Practice?        @relation(fields: [practiceId], references: [id], onDelete: SetNull)
+  doctorUser        DoctorUser?      @relation(fields: [doctorUserId], references: [id], onDelete: SetNull)
+  pharmacyAccount   PharmacyAccount? @relation(fields: [pharmacyAccountId], references: [id], onDelete: SetNull)
+  sessions          Session[]
+
+  @@index([practiceId])
+  @@index([doctorUserId])
+  @@index([pharmacyAccountId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model PracticePharmacyConnection {
@@ -166,6 +252,7 @@ model PracticePharmacyConnection {
   pharmacyId               String
   pharmacyVerificationCode String
   verificationStatus       ConnectionVerificationStatus  @default(PENDING)
+  verificationReason       String?
   connectedAt              DateTime?
   verifiedByAiAt           DateTime?
   createdAt                DateTime                      @default(now())
@@ -254,6 +341,9 @@ model RequestDistribution {
   processingStartedAt DateTime?
   dispensedAt        DateTime?
   blockedAt          DateTime?
+  viewedByUserId     String?
+  processingByUserId String?
+  dispensedByUserId  String?
   note               String?
   createdAt          DateTime                  @default(now())
   updatedAt          DateTime                  @updatedAt
@@ -270,6 +360,9 @@ model DispenseLog {
   distributionId String?
   eventType      String
   eventNote      String?
+  actorUserId    String?
+  actorEmail     String?
+  actorRole      AuthRole?
   createdAt      DateTime             @default(now())
   request        Request              @relation(fields: [requestId], references: [id], onDelete: Cascade)
   pharmacy       PharmacyAccount?     @relation(fields: [pharmacyId], references: [id], onDelete: SetNull)
@@ -321,4 +414,109 @@ model StripePaymentRecord {
   updatedAt             DateTime         @updatedAt
   practice              Practice?        @relation(fields: [practiceId], references: [id], onDelete: SetNull)
   pharmacy              PharmacyAccount? @relation(fields: [pharmacyId], references: [id], onDelete: SetNull)
+}
+
+model StripeWebhookEvent {
+  id            String   @id @default(cuid())
+  stripeEventId String   @unique
+  eventType     String
+  objectId      String?
+  status        String   @default("processed")
+  errorMessage  String?
+  payload       Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model SwexCustomerLink {
+  id              String          @id @default(cuid())
+  entityType      SwexEntityType
+  practiceId      String?
+  pharmacyId      String?
+  stripeCustomerId String
+  swexProjectId   String
+  swexCustomerRef String
+  externalRef     String          @unique
+  customerName    String?
+  customerEmail   String?
+  phone           String?
+  company         String?
+  address         Json?
+  lastPayload     Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  practice        Practice?       @relation(fields: [practiceId], references: [id], onDelete: SetNull)
+  pharmacy        PharmacyAccount? @relation(fields: [pharmacyId], references: [id], onDelete: SetNull)
+  orders          SwexOrderSync[]
+
+  @@unique([swexProjectId, stripeCustomerId])
+}
+
+model SwexOrderSync {
+  id                   String           @id @default(cuid())
+  customerLinkId       String?
+  entityType           SwexEntityType
+  practiceId           String?
+  pharmacyId           String?
+  swexProjectId        String
+  swexCustomerRef      String?
+  swexSaleRef          String
+  externalRef          String           @unique
+  stripeEventId        String?
+  stripeCheckoutSessionId String?
+  stripeInvoiceId      String?
+  stripePaymentIntentId String?
+  stripeSubscriptionId String?
+  productName          String
+  amountCents          Int
+  currency             String           @default("EUR")
+  billingCycle         String
+  paymentStatus        String
+  payload              Json?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  customerLink         SwexCustomerLink? @relation(fields: [customerLinkId], references: [id], onDelete: SetNull)
+  practice             Practice?        @relation(fields: [practiceId], references: [id], onDelete: SetNull)
+  pharmacy             PharmacyAccount? @relation(fields: [pharmacyId], references: [id], onDelete: SetNull)
+
+  @@unique([swexProjectId, stripeCheckoutSessionId])
+  @@unique([swexProjectId, stripeInvoiceId])
+  @@unique([swexProjectId, stripePaymentIntentId])
+}
+
+model PharmacyUsageSnapshot {
+  id                String          @id @default(cuid())
+  pharmacyId        String
+  monthStart        DateTime
+  releasedCount     Int             @default(0)
+  dispensedCount    Int             @default(0)
+  activeConnections Int             @default(0)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  pharmacy          PharmacyAccount @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  invoices          PharmacyInvoice[]
+
+  @@unique([pharmacyId, monthStart])
+}
+
+model PharmacyInvoice {
+  id                    String               @id @default(cuid())
+  pharmacyId            String
+  usageSnapshotId       String?
+  monthStart            DateTime
+  monthEnd              DateTime
+  plan                  PharmacyPlan
+  amountCents           Int
+  currency              String               @default("eur")
+  status                InvoiceStatus        @default(DRAFT)
+  stripeInvoiceId       String?
+  stripeHostedInvoiceUrl String?
+  stripeCustomerId      String?
+  lineItemDescription   String
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  pharmacy              PharmacyAccount      @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  usageSnapshot         PharmacyUsageSnapshot? @relation(fields: [usageSnapshotId], references: [id], onDelete: SetNull)
+
+  @@unique([pharmacyId, monthStart])
 }

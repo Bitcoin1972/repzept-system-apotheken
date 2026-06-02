@@ -20,7 +20,8 @@
     "next": "^15.5.18",
     "nodemailer": "^6.10.1",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "stripe": "^18.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.14",

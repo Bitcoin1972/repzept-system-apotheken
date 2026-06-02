@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 
+import { AuthRole } from "@prisma/client";
+
+import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
+  const user = await requireRole([AuthRole.PHARMACY_USER]);
   const { searchParams } = new URL(request.url);
-  const pharmacyId = searchParams.get("pharmacyId");
+  const pharmacyId = user.pharmacyAccountId ?? searchParams.get("pharmacyId");
 
   if (!pharmacyId) {
     return NextResponse.json({ error: "pharmacyId fehlt." }, { status: 400 });

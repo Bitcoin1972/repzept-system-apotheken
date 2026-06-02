@@ -43,6 +43,31 @@ export async function POST(request: Request) {
         })
       : Promise.resolve(null),
   ]);
+  const customerLinkFilters = [];
+
+  if (body.practiceId) {
+    customerLinkFilters.push({
+      practiceId: body.practiceId,
+    });
+  }
+
+  if (body.pharmacyId) {
+    customerLinkFilters.push({
+      pharmacyId: body.pharmacyId,
+    });
+  }
+
+  const swexCustomerLink =
+    customerLinkFilters.length > 0
+      ? await prisma.swexCustomerLink.findFirst({
+          where: {
+            OR: customerLinkFilters,
+          },
+          orderBy: {
+            updatedAt: "desc",
+          },
+        })
+      : null;
 
   const category = body.category ?? `${role.toLowerCase()}_${component.toLowerCase()}`;
   const technicalSignature = buildTechnicalSignature(component, body.message ?? "");
@@ -77,7 +102,10 @@ export async function POST(request: Request) {
     },
   });
 
-  const swexResult = await submitSupportTicketToSwex(swexPayload);
+  const swexResult = await submitSupportTicketToSwex({
+    ...swexPayload,
+    customerRef: swexCustomerLink?.swexCustomerRef ?? null,
+  });
 
   const ticket = await prisma.supportTicket.create({
     data: {
@@ -104,6 +132,7 @@ export async function POST(request: Request) {
         connectionId: body.connectionId ?? null,
         requestId: body.requestId ?? null,
         requestedPriority: mapSeverityToPriority(severity),
+        swexCustomerRef: swexCustomerLink?.swexCustomerRef ?? null,
       },
       swexPayload,
       swexTicketRef: swexResult.ticketRef,

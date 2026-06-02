@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
+  AuthRole,
   PharmacyReleaseStatus,
   RequestDistributionStatus,
 } from "@prisma/client";
 
+import { requireRole } from "@/lib/auth";
 import {
   formatPharmacyReleaseStatus,
   formatRecipeFlag,
@@ -35,6 +37,7 @@ function formatDate(value?: Date | null) {
 
 export default async function PracticeRequestPage({ params }: PageContext) {
   const resolvedParams = await params;
+  const user = await requireRole([AuthRole.PRACTICE_ADMIN, AuthRole.DOCTOR_USER]);
 
   const requestRecord = await prisma.request.findUnique({
     where: {
@@ -77,6 +80,19 @@ export default async function PracticeRequestPage({ params }: PageContext) {
     notFound();
   }
 
+  if (!user.practiceId || requestRecord.practiceId !== user.practiceId) {
+    notFound();
+  }
+
+  if (
+    user.role === AuthRole.DOCTOR_USER &&
+    user.doctorUserId &&
+    requestRecord.releasedByDoctorId &&
+    requestRecord.releasedByDoctorId !== user.doctorUserId
+  ) {
+    notFound();
+  }
+
   const access = getPracticeAccessState(requestRecord.practice ?? {});
 
   if (access.status !== "active") {
@@ -110,6 +126,9 @@ export default async function PracticeRequestPage({ params }: PageContext) {
           </p>
         </div>
         <div className="hero-actions">
+          <Link href="/practice/requests" className="secondary-link">
+            Arzt-Nachverfolgung
+          </Link>
           <Link href="/practice/new" className="secondary-link">
             Neue Freigabe
           </Link>

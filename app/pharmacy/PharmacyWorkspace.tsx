@@ -10,6 +10,7 @@ import {
 } from "@/lib/labels";
 
 type PharmacyWorkspaceProps = {
+  allowAccountCreation?: boolean;
   practices: Array<{
     id: string;
     name: string;
@@ -24,6 +25,26 @@ type PharmacyWorkspaceProps = {
     latitude: number | null;
     longitude: number | null;
     verificationCode: string;
+    plan?: string;
+    monthlyPriceCents?: number;
+    subscriptionStatus?: string;
+    billingEmail?: string | null;
+    stripeCustomerRef?: string | null;
+    stripeLatestInvoiceRef?: string | null;
+    usageSnapshots?: Array<{
+      id: string;
+      monthStart: string;
+      releasedCount: number;
+      dispensedCount: number;
+      activeConnections: number;
+    }>;
+    invoices?: Array<{
+      id: string;
+      monthStart: string;
+      amountCents: number;
+      status: string;
+      lineItemDescription: string;
+    }>;
     practiceConnections: Array<{
       id: string;
       practiceId: string;
@@ -56,6 +77,7 @@ type InboxItem = {
 };
 
 export function PharmacyWorkspace(props: PharmacyWorkspaceProps) {
+  const allowAccountCreation = props.allowAccountCreation ?? true;
   const [pharmacies, setPharmacies] = useState(props.pharmacies);
   const [selectedPharmacyId, setSelectedPharmacyId] = useState(props.pharmacies[0]?.id ?? "");
   const [selectedPracticeId, setSelectedPracticeId] = useState(props.practices[0]?.id ?? "");
@@ -74,6 +96,7 @@ export function PharmacyWorkspace(props: PharmacyWorkspaceProps) {
   const [supportMessage, setSupportMessage] = useState("");
   const [supportState, setSupportState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [inbox, setInbox] = useState<InboxItem[]>([]);
+  const [billingState, setBillingState] = useState<"idle" | "loading" | "done" | "error">("idle");
 
   async function loadInbox(pharmacyId: string) {
     if (!pharmacyId) {
@@ -236,6 +259,65 @@ export function PharmacyWorkspace(props: PharmacyWorkspaceProps) {
     }
   }
 
+  async function prepareMonthlyInvoice() {
+    setBillingState("loading");
+
+    try {
+      const response = await fetch("/api/billing/monthly-run", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        throw new Error("Monatsabrechnung fehlgeschlagen.");
+      }
+
+      const payload = await response.json();
+      setPharmacies((current) =>
+        current.map((pharmacy) =>
+          pharmacy.id === selectedPharmacyId
+            ? {
+                ...pharmacy,
+                stripeLatestInvoiceRef: payload.invoice?.stripeInvoiceId ?? pharmacy.stripeLatestInvoiceRef,
+                usageSnapshots: payload.usageSnapshot
+                  ? [
+                      {
+                        id: payload.usageSnapshot.id,
+                        monthStart: payload.usageSnapshot.monthStart,
+                        releasedCount: payload.usageSnapshot.releasedCount,
+                        dispensedCount: payload.usageSnapshot.dispensedCount,
+                        activeConnections: payload.usageSnapshot.activeConnections,
+                      },
+                      ...(pharmacy.usageSnapshots ?? []).filter(
+                        (snapshot) => snapshot.id !== payload.usageSnapshot.id,
+                      ),
+                    ].slice(0, 3)
+                  : pharmacy.usageSnapshots,
+                invoices: payload.invoice
+                  ? [
+                      {
+                        id: payload.invoice.id,
+                        monthStart: payload.invoice.monthStart,
+                        amountCents: payload.invoice.amountCents,
+                        status: payload.invoice.status,
+                        lineItemDescription: payload.invoice.lineItemDescription,
+                      },
+                      ...(pharmacy.invoices ?? []).filter((invoice) => invoice.id !== payload.invoice.id),
+                    ].slice(0, 3)
+                  : pharmacy.invoices,
+              }
+            : pharmacy,
+        ),
+      );
+      setBillingState("done");
+    } catch {
+      setBillingState("error");
+    }
+  }
+
   const selectedPharmacy = pharmacies.find((pharmacy) => pharmacy.id === selectedPharmacyId) ?? null;
 
   return (
@@ -282,97 +364,105 @@ export function PharmacyWorkspace(props: PharmacyWorkspaceProps) {
                   ))}
                 </select>
               </label>
-              <label className="field">
-                <span>Neue Apotheke</span>
-                <input
-                  value={pharmacyForm.name}
-                  onChange={(event) =>
-                    setPharmacyForm((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
-                  placeholder="Name der Apotheke"
-                />
-              </label>
-              <label className="field">
-                <span>E-Mail</span>
-                <input
-                  value={pharmacyForm.email}
-                  onChange={(event) =>
-                    setPharmacyForm((current) => ({
-                      ...current,
-                      email: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span>Strasse</span>
-                <input
-                  value={pharmacyForm.street}
-                  onChange={(event) =>
-                    setPharmacyForm((current) => ({
-                      ...current,
-                      street: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span>PLZ</span>
-                <input
-                  value={pharmacyForm.postalCode}
-                  onChange={(event) =>
-                    setPharmacyForm((current) => ({
-                      ...current,
-                      postalCode: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span>Ort</span>
-                <input
-                  value={pharmacyForm.city}
-                  onChange={(event) =>
-                    setPharmacyForm((current) => ({
-                      ...current,
-                      city: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span>Breitengrad</span>
-                <input
-                  value={pharmacyForm.latitude}
-                  onChange={(event) =>
-                    setPharmacyForm((current) => ({
-                      ...current,
-                      latitude: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span>Laengengrad</span>
-                <input
-                  value={pharmacyForm.longitude}
-                  onChange={(event) =>
-                    setPharmacyForm((current) => ({
-                      ...current,
-                      longitude: event.target.value,
-                    }))
-                  }
-                />
-              </label>
+              {allowAccountCreation ? (
+                <>
+                  <label className="field">
+                    <span>Neue Apotheke</span>
+                    <input
+                      value={pharmacyForm.name}
+                      onChange={(event) =>
+                        setPharmacyForm((current) => ({
+                          ...current,
+                          name: event.target.value,
+                        }))
+                      }
+                      placeholder="Name der Apotheke"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>E-Mail</span>
+                    <input
+                      value={pharmacyForm.email}
+                      onChange={(event) =>
+                        setPharmacyForm((current) => ({
+                          ...current,
+                          email: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Strasse</span>
+                    <input
+                      value={pharmacyForm.street}
+                      onChange={(event) =>
+                        setPharmacyForm((current) => ({
+                          ...current,
+                          street: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>PLZ</span>
+                    <input
+                      value={pharmacyForm.postalCode}
+                      onChange={(event) =>
+                        setPharmacyForm((current) => ({
+                          ...current,
+                          postalCode: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Ort</span>
+                    <input
+                      value={pharmacyForm.city}
+                      onChange={(event) =>
+                        setPharmacyForm((current) => ({
+                          ...current,
+                          city: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Breitengrad</span>
+                    <input
+                      value={pharmacyForm.latitude}
+                      onChange={(event) =>
+                        setPharmacyForm((current) => ({
+                          ...current,
+                          latitude: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Laengengrad</span>
+                    <input
+                      value={pharmacyForm.longitude}
+                      onChange={(event) =>
+                        setPharmacyForm((current) => ({
+                          ...current,
+                          longitude: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                </>
+              ) : null}
             </div>
             <div className="action-row">
-              <button type="button" className="secondary-button" onClick={createPharmacyAccount}>
-                {createState === "loading" ? "Legt an..." : "Apotheke anlegen"}
-              </button>
-              {createState === "done" ? <span className="status-text">Apotheke angelegt.</span> : null}
+              {allowAccountCreation ? (
+                <>
+                  <button type="button" className="secondary-button" onClick={createPharmacyAccount}>
+                    {createState === "loading" ? "Legt an..." : "Apotheke anlegen"}
+                  </button>
+                  {createState === "done" ? <span className="status-text">Apotheke angelegt.</span> : null}
+                </>
+              ) : null}
               {selectedPharmacy ? (
                 <span className="context-chip">
                   Code: {selectedPharmacy.verificationCode}
@@ -504,6 +594,75 @@ export function PharmacyWorkspace(props: PharmacyWorkspaceProps) {
                 ))
               )}
             </div>
+          </article>
+
+          <article className="panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Abo / Abrechnung</p>
+                <h2>Monatspaket je Apotheke</h2>
+              </div>
+            </div>
+            {selectedPharmacy ? (
+              <div className="stack-list">
+                <div className="stack-item">
+                  <strong>Tarif</strong>
+                  <span>{selectedPharmacy.plan ?? "SMALL"}</span>
+                  <span>
+                    {new Intl.NumberFormat("de-DE", {
+                      style: "currency",
+                      currency: "EUR",
+                    }).format((selectedPharmacy.monthlyPriceCents ?? 9900) / 100)}
+                    {" "}pro Monat
+                  </span>
+                </div>
+                <div className="stack-item">
+                  <strong>Status</strong>
+                  <span>{selectedPharmacy.subscriptionStatus ?? "INACTIVE"}</span>
+                  <span>{selectedPharmacy.billingEmail ?? selectedPharmacy.email ?? "keine Billing-E-Mail"}</span>
+                </div>
+                <div className="stack-item">
+                  <strong>Letzte Stripe-Referenz</strong>
+                  <span>{selectedPharmacy.stripeLatestInvoiceRef ?? "noch keine vorbereitet"}</span>
+                  <span>{selectedPharmacy.stripeCustomerRef ?? "kein Stripe Customer hinterlegt"}</span>
+                </div>
+                {(selectedPharmacy.usageSnapshots ?? []).map((snapshot) => (
+                  <div key={snapshot.id} className="stack-item">
+                    <strong>
+                      {new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(
+                        new Date(snapshot.monthStart),
+                      )}
+                    </strong>
+                    <span>{snapshot.releasedCount} Freigaben</span>
+                    <span>{snapshot.dispensedCount} Abgaben</span>
+                    <span>{snapshot.activeConnections} aktive Praxispartner</span>
+                  </div>
+                ))}
+                {(selectedPharmacy.invoices ?? []).map((invoice) => (
+                  <div key={invoice.id} className="stack-item">
+                    <strong>{invoice.status}</strong>
+                    <span>
+                      {new Intl.NumberFormat("de-DE", {
+                        style: "currency",
+                        currency: "EUR",
+                      }).format(invoice.amountCents / 100)}
+                    </span>
+                    <span>{invoice.lineItemDescription}</span>
+                  </div>
+                ))}
+                <div className="action-row">
+                  <button type="button" className="secondary-button" onClick={prepareMonthlyInvoice}>
+                    {billingState === "loading" ? "Bereitet vor..." : "Monatsrechnung vorbereiten"}
+                  </button>
+                  {billingState === "done" ? <span className="status-text">Monatsrechnung vorbereitet.</span> : null}
+                  {billingState === "error" ? (
+                    <span className="status-text error">Monatsrechnung konnte nicht vorbereitet werden.</span>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <p className="muted-copy">Keine Apotheke aktiv.</p>
+            )}
           </article>
 
           <article className="panel">

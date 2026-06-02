@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { CatalogSource, PmsType } from "@prisma/client";
+import { AuthRole, CatalogSource, PmsType } from "@prisma/client";
 
-import { ensurePracticeContext } from "@/lib/bootstrap";
+import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 function maskKey(value?: string | null) {
@@ -22,13 +22,23 @@ function parseDate(value?: string | null) {
 }
 
 export async function POST(request: Request) {
+  const user = await requireRole([AuthRole.PRACTICE_ADMIN]);
   const body = await request.json();
-  const fallbackPractice = await ensurePracticeContext();
+  const fallbackPractice = await prisma.practice.findUniqueOrThrow({
+    where: {
+      id: user.practiceId ?? "",
+    },
+  });
+  const targetPracticeId = user.practiceId;
 
-  const practice = body.practiceId
+  if (!targetPracticeId) {
+    return NextResponse.json({ error: "Kein Praxiskonto hinterlegt." }, { status: 400 });
+  }
+
+  const practice = targetPracticeId
     ? await prisma.practice.update({
         where: {
-          id: body.practiceId,
+          id: targetPracticeId,
         },
         data: {
           name: body.name ?? fallbackPractice.name,
@@ -84,46 +94,7 @@ export async function POST(request: Request) {
           },
         },
       })
-    : await prisma.practice.create({
-        data: {
-          name: body.name ?? "Neue Praxis",
-          street: body.street ?? null,
-          city: body.city ?? null,
-          postalCode: body.postalCode ?? null,
-          latitude:
-            body.latitude !== undefined && body.latitude !== "" ? Number(body.latitude) : null,
-          longitude:
-            body.longitude !== undefined && body.longitude !== "" ? Number(body.longitude) : null,
-          pickupNotificationEmail: body.pickupNotificationEmail ?? null,
-          trialStartsAt:
-            body.trialStartsAt !== undefined ? parseDate(body.trialStartsAt) : null,
-          trialEndsAt: body.trialEndsAt !== undefined ? parseDate(body.trialEndsAt) : null,
-          pmsType: (body.pmsType as PmsType | undefined) ?? PmsType.GENERIC_PMS,
-          pmsSystemLabel: body.pmsSystemLabel ?? "Neues PMS",
-          pmsApiBaseUrl: body.pmsApiBaseUrl ?? null,
-          pmsApiKeyMasked: maskKey(body.pmsApiKey),
-          catalogSource:
-            (body.catalogSource as CatalogSource | undefined) ?? CatalogSource.PMS_CATALOG,
-          catalogProviderLabel: body.catalogProviderLabel ?? null,
-          catalogApiBaseUrl: body.catalogApiBaseUrl ?? null,
-          catalogApiKeyMasked: maskKey(body.catalogApiKey),
-          stripeCustomerRef: body.stripeCustomerRef ?? null,
-          stripeSubscriptionRef: body.stripeSubscriptionRef ?? null,
-          stripeCheckoutUrl: body.stripeCheckoutUrl ?? null,
-          swexTenantRef: body.swexTenantRef ?? null,
-          renderWorkspaceSlug: body.renderWorkspaceSlug ?? null,
-          renderServiceName: body.renderServiceName ?? null,
-          copyToOwnRenderOnActivation: body.copyToOwnRenderOnActivation ?? false,
-        },
-        include: {
-          doctors: true,
-          pharmacyConnections: {
-            include: {
-              pharmacy: true,
-            },
-          },
-        },
-      });
+    : fallbackPractice;
 
   if (body.doctorName) {
     await prisma.doctorUser.create({

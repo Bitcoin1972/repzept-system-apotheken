@@ -1,8 +1,10 @@
+import { AuthRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { describeCatalogStrategy } from "@/lib/integrations/catalog";
 import { buildRevenueSnapshot } from "@/lib/integrations/stripe";
 import { getPracticeDashboardContext } from "@/lib/bootstrap";
+import { requireRole } from "@/lib/auth";
 import { getPracticeAccessState } from "@/lib/practice-access";
 
 import { PracticeComposer } from "./PracticeComposer";
@@ -10,7 +12,11 @@ import { PracticeComposer } from "./PracticeComposer";
 export const dynamic = "force-dynamic";
 
 export default async function PracticeNewPage() {
-  const context = await getPracticeDashboardContext();
+  const user = await requireRole([AuthRole.PRACTICE_ADMIN, AuthRole.DOCTOR_USER]);
+  const context = await getPracticeDashboardContext({
+    practiceId: user.practiceId ?? undefined,
+    activeDoctorId: user.doctorUserId,
+  });
   const access = getPracticeAccessState(context.practice);
 
   if (access.status !== "active") {

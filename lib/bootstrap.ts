@@ -27,7 +27,16 @@ function buildVerificationCode(name: string) {
   return `APO-${name.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase() || "DEMO"}-2048`;
 }
 
-export async function ensurePracticeContext() {
+export async function ensurePracticeContext(practiceId?: string) {
+  if (practiceId) {
+    return prisma.practice.findUniqueOrThrow({
+      where: {
+        id: practiceId,
+      },
+      include: defaultPracticeInclude,
+    });
+  }
+
   const existingPractice = await prisma.practice.findFirst({
     include: defaultPracticeInclude,
     orderBy: {
@@ -144,8 +153,11 @@ export async function ensurePracticeContext() {
   }
 }
 
-export async function getPracticeDashboardContext() {
-  const practice = await ensurePracticeContext();
+export async function getPracticeDashboardContext(input?: {
+  practiceId?: string;
+  activeDoctorId?: string | null;
+}) {
+  const practice = await ensurePracticeContext(input?.practiceId);
 
   const [recentRequests, recentSupportTickets, pharmacies] = await Promise.all([
     prisma.request.findMany({
@@ -195,6 +207,7 @@ export async function getPracticeDashboardContext() {
     recentRequests,
     recentSupportTickets,
     pharmacies,
-    activeDoctor: practice.doctors[0] ?? null,
+    activeDoctor:
+      practice.doctors.find((doctor) => doctor.id === input?.activeDoctorId) ?? practice.doctors[0] ?? null,
   };
 }
