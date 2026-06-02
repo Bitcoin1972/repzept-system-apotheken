@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import {
   ConnectionVerificationStatus,
-  MedicationSource,
   PharmacyReleaseStatus,
   PrescriptionType,
   RecipeFormType,
@@ -122,8 +121,7 @@ export async function POST(request: Request) {
       medicationName: body.medicationName ?? null,
       medicationStrength: body.medicationStrength ?? null,
       medicationPzn: body.medicationPzn ?? null,
-      medicationSource:
-        (body.medicationSource as MedicationSource | undefined) ?? MedicationSource.MANUAL_INPUT,
+      medicationSource: body.medicationSource ?? "MANUAL_INPUT",
       clinicalPayload: {
         inputLanguage: body.inputLanguage ?? "Deutsch",
         recipePreview: body.recipePreview ?? summary,

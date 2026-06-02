@@ -8,6 +8,8 @@ datasource db {
 }
 
 enum PrescriptionType {
+  RED
+  GREEN
   ACUTE
   REPEAT
   DISCHARGE
@@ -16,6 +18,8 @@ enum PrescriptionType {
 
 enum RequestStatus {
   DRAFT
+  ANSWERED
+  CLOSED
   APPROVED
   RELEASED
   DISPENSED
@@ -23,6 +27,7 @@ enum RequestStatus {
 }
 
 enum SignatureStatus {
+  DRAFT
   PENDING
   SIGNED
 }
@@ -31,12 +36,6 @@ enum PharmacyReleaseStatus {
   NOT_RELEASED
   PRE_RELEASED
   STANDARD_FLOW_COMPLETED
-}
-
-enum MedicationSource {
-  MANUAL_INPUT
-  PMS_CATALOG
-  EXTERNAL_API
 }
 
 enum RecipeFormType {
@@ -183,26 +182,34 @@ model Request {
   id                    String                @id @default(cuid())
   practiceId            String?
   releasedByDoctorId    String?
-  doctorName            String
+  doctorName            String?
   insuranceProvider     String?
   patientReference      String?
   patientEmail          String?
+  demoMode              Boolean               @default(false)
   prescriptionType      PrescriptionType      @default(ACUTE)
   recipeFormType        RecipeFormType        @default(GKV_MUSTER16)
-  status                RequestStatus         @default(APPROVED)
-  signatureStatus       SignatureStatus       @default(SIGNED)
+  status                RequestStatus         @default(DRAFT)
+  signatureStatus       SignatureStatus       @default(DRAFT)
   pharmacyReleaseStatus PharmacyReleaseStatus @default(NOT_RELEASED)
   normalFlowPending     Boolean               @default(false)
   releasedToPharmacyAt  DateTime?
   signedAt              DateTime?
-  issuedAt              DateTime              @default(now())
+  issuedAt              DateTime?
   summary               String?
   transcription         String?
   outputText            String?
   medicationName        String?
+  productName           String?
+  manufacturer          String?
+  dosage                String?
+  form                  String?
+  pzn                   String?
+  quantity              String?
+  signedBy              String?
   medicationStrength    String?
   medicationPzn         String?
-  medicationSource      MedicationSource      @default(MANUAL_INPUT)
+  medicationSource      String?
   clinicalPayload       Json?
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
@@ -212,6 +219,7 @@ model Request {
   requestDistributions  RequestDistribution[]
   dispenseLogs          DispenseLog[]
   supportTickets        SupportTicket[]
+  pharmacyResponses     PharmacyResponse[]
 }
 
 model Response {
@@ -221,6 +229,18 @@ model Response {
   payload   Json
   createdAt DateTime @default(now())
   request   Request  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
+
+model PharmacyResponse {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  requestId      String
+  pharmacyName   String
+  responseStatus String
+  message        String
+  request        Request  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
 }
 
 model RequestDistribution {
