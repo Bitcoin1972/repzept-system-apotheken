@@ -11,11 +11,10 @@ import {
   toAuthRole,
 } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { buildPublicUrl } from "@/lib/request-url";
 
 function redirectToRegister(request: Request, role: string, message: string) {
-  return NextResponse.redirect(
-    new URL(`/register?role=${role}&error=${encodeURIComponent(message)}`, request.url),
-  );
+  return NextResponse.redirect(buildPublicUrl(request, `/register?role=${role}&error=${encodeURIComponent(message)}`));
 }
 
 function buildVerificationCode() {
@@ -144,7 +143,7 @@ export async function POST(request: Request) {
 
     await createSession(user.id);
 
-    return NextResponse.redirect(new URL(getRoleHomePath(user.role), request.url));
+    return NextResponse.redirect(buildPublicUrl(request, getRoleHomePath(user.role)));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Registrierung fehlgeschlagen.";
     return redirectToRegister(request, role, message);

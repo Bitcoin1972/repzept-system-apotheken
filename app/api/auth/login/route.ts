@@ -8,6 +8,7 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { buildPublicUrl } from "@/lib/request-url";
 
 export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Anmeldung fehlgeschlagen." }, { status: 401 });
     }
 
-    return NextResponse.redirect(new URL("/login?error=Anmeldung%20fehlgeschlagen.", request.url), 303);
+    return NextResponse.redirect(buildPublicUrl(request, "/login?error=Anmeldung%20fehlgeschlagen."), 303);
   }
 
   if (roleHint) {
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Bitte den passenden Login fuer diese Rolle verwenden." }, { status: 403 });
       }
 
-      return NextResponse.redirect(new URL(`/login?error=${error}&role=${roleHint}`, request.url), 303);
+      return NextResponse.redirect(buildPublicUrl(request, `/login?error=${error}&role=${roleHint}`), 303);
     }
   }
 
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
   const redirectTo = getDashboardPathForRole(user.role);
 
   if (!expectsJson) {
-    return NextResponse.redirect(new URL(redirectTo, request.url), 303);
+    return NextResponse.redirect(buildPublicUrl(request, redirectTo), 303);
   }
 
   return NextResponse.json({ ok: true, redirectTo });

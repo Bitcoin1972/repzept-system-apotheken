@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { destroySession } from "@/lib/auth";
+import { buildPublicUrl } from "@/lib/request-url";
 
 export async function GET(request: Request) {
   await destroySession();
 
-  return NextResponse.redirect(new URL("/auth/login", request.url), 303);
+  return NextResponse.redirect(buildPublicUrl(request, "/auth/login"), 303);
 }
 
 export async function POST(request: Request) {
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
   const expectsJson = contentType.includes("application/json");
 
   if (!expectsJson) {
-    return NextResponse.redirect(new URL("/auth/login", request.url), 303);
+    return NextResponse.redirect(buildPublicUrl(request, "/auth/login"), 303);
   }
 
   return NextResponse.json({
