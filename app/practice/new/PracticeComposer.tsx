@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   formatRecipeFlag,
@@ -63,6 +63,38 @@ type PracticeComposerProps = {
 
 type RecipeFormType = "GKV_MUSTER16" | "GREEN" | "PRIVATE" | "BTM" | "T_REZEPT";
 
+type BrowserSpeechRecognition = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechRecognitionAlternativeLike = {
+  transcript: string;
+};
+
+type SpeechRecognitionResultLike = {
+  isFinal: boolean;
+  0: SpeechRecognitionAlternativeLike;
+};
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: ArrayLike<SpeechRecognitionResultLike>;
+};
+
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => BrowserSpeechRecognition;
+    webkitSpeechRecognition?: new () => BrowserSpeechRecognition;
+  }
+}
+
 const defaultMedication = {
   medicationName: "",
   medicationStrength: "",
@@ -84,6 +116,10 @@ const defaultRecipeFlags = {
 export function PracticeComposer(props: PracticeComposerProps) {
   const [inputLanguage, setInputLanguage] = useState("Deutsch");
   const [outputText, setOutputText] = useState("");
+  const [dictationSupported, setDictationSupported] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [dictationState, setDictationState] = useState<"idle" | "listening" | "error">("idle");
+  const [dictationError, setDictationError] = useState("");
   const [patientEmail, setPatientEmail] = useState("");
   const [recipeFormType, setRecipeFormType] = useState<RecipeFormType>("GKV_MUSTER16");
   const [recipeFlags, setRecipeFlags] = useState(defaultRecipeFlags);
@@ -95,6 +131,17 @@ export function PracticeComposer(props: PracticeComposerProps) {
   const [supportMessage, setSupportMessage] = useState("");
   const [supportComponent, setSupportComponent] = useState("SUPPORT_UI");
   const [supportState, setSupportState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const finalTranscriptRef = useRef("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const SpeechRecognitionCtor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    setDictationSupported(Boolean(SpeechRecognitionCtor));
+  }, []);
 
   const lines = outputText
     .split("\n")
@@ -135,6 +182,105 @@ export function PracticeComposer(props: PracticeComposerProps) {
       ...current,
       [flag]: checked,
     }));
+  }
+
+  function mapSpeechLanguage(language: string) {
+    if (language === "Englisch") {
+      return "en-US";
+    }
+
+    if (language === "Tuerkisch") {
+      return "tr-TR";
+    }
+
+    return "de-DE";
+  }
+
+  function stopDictation() {
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    setIsRecording(false);
+    setDictationState("idle");
+  }
+
+  function startDictation() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const SpeechRecognitionCtor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) {
+      setDictationState("error");
+      setDictationError("Dieses Geraet unterstuetzt keine Browser-Spracherkennung.");
+      return;
+    }
+
+    finalTranscriptRef.current = outputText.trim();
+    const recognition = new SpeechRecognitionCtor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = mapSpeechLanguage(inputLanguage);
+
+    recognition.onresult = (event) => {
+      let finalChunk = "";
+      let interimChunk = "";
+
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const transcript = result[0]?.transcript?.trim() ?? "";
+
+        if (!transcript) {
+          continue;
+        }
+
+        if (result.isFinal) {
+          finalChunk += `${transcript} `;
+        } else {
+          interimChunk += `${transcript} `;
+        }
+      }
+
+      if (finalChunk.trim()) {
+        finalTranscriptRef.current = [finalTranscriptRef.current, finalChunk.trim()].filter(Boolean).join("\n");
+      }
+
+      const nextValue = [finalTranscriptRef.current, interimChunk.trim()].filter(Boolean).join("\n");
+      setOutputText(nextValue);
+    };
+
+    recognition.onerror = (event) => {
+      setDictationState("error");
+      setDictationError(
+        event.error === "not-allowed"
+          ? "Mikrofonzugriff wurde blockiert."
+          : "Die Spracheingabe konnte nicht gestartet werden.",
+      );
+      setIsRecording(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onend = () => {
+      setOutputText(finalTranscriptRef.current);
+      setIsRecording(false);
+      setDictationState((current) => (current === "error" ? current : "idle"));
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = recognition;
+    setDictationError("");
+    setDictationState("listening");
+    setIsRecording(true);
+    recognition.start();
+  }
+
+  function toggleDictation() {
+    if (isRecording) {
+      stopDictation();
+      return;
+    }
+
+    startDictation();
   }
 
   async function releasePrescription() {
@@ -398,12 +544,32 @@ export function PracticeComposer(props: PracticeComposerProps) {
 
               <label className="field">
                 <span>Output</span>
+                <div className="action-row compact-action-row">
+                  <button
+                    type="button"
+                    className={`secondary-button microphone-button ${isRecording ? "is-recording" : ""}`}
+                    onClick={toggleDictation}
+                    disabled={!dictationSupported}
+                  >
+                    {isRecording ? "Aufnahme stoppen" : "Mikrofon starten"}
+                  </button>
+                  <span className="status-text">
+                    {!dictationSupported
+                      ? "Browser-Spracherkennung auf diesem Geraet nicht verfuegbar."
+                      : dictationState === "listening"
+                        ? "Mikrofon aktiv. Das Diktat wird direkt ins Freitextfeld geschrieben."
+                        : "Mikrofon aus. Sie koennen weiter frei tippen oder ein neues Diktat starten."}
+                  </span>
+                </div>
                 <textarea
                   rows={7}
                   placeholder="Hier kommt der Rezepttext oder die zusammengefasste Ausgabe hinein."
                   value={outputText}
                   onChange={(event) => setOutputText(event.target.value)}
                 />
+                {dictationState === "error" ? (
+                  <span className="status-text error">{dictationError}</span>
+                ) : null}
               </label>
 
               <div className="preview-card">

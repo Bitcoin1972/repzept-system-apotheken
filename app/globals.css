@@ -341,6 +341,11 @@ button {
   margin-top: 1rem;
 }
 
+.compact-action-row {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
 .primary-button,
 .secondary-button,
 .ghost-button,
@@ -371,6 +376,12 @@ button {
   background: transparent;
   border-color: rgba(31, 122, 90, 0.25);
   color: var(--accent-strong);
+}
+
+.microphone-button.is-recording {
+  background: rgba(170, 51, 35, 0.12);
+  border-color: rgba(170, 51, 35, 0.3);
+  color: #8f2618;
 }
 
 .primary-button:hover,
