@@ -1,17 +1,29 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, getRoleHomePath, parseLoginRoleHint } from "@/lib/auth";
 
 import { LoginScreen } from "./screen";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+type LoginPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function readParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
   const user = await getCurrentUser();
+  const params = searchParams ? await searchParams : {};
+  const role = parseLoginRoleHint(readParam(params.role));
+  const error = readParam(params.error) ?? null;
+  const registered = readParam(params.registered) === "1";
 
   if (user) {
-    redirect(user.role === "PHARMACY_USER" ? "/pharmacy" : "/practice/new");
+    redirect(getRoleHomePath(user.role));
   }
 
-  return <LoginScreen />;
+  return <LoginScreen initialRole={role ?? "practice_admin"} initialError={error} registered={registered} />;
 }

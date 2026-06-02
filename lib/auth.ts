@@ -10,6 +10,7 @@ const SESSION_COOKIE = "repzept_session";
 const SESSION_DAYS = 14;
 
 export type RegistrationRole = "practice_admin" | "doctor_user" | "pharmacy_user";
+export type LoginRoleHint = "practice_admin" | "doctor_user" | "pharmacy_user";
 
 function hashSessionToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -44,6 +45,14 @@ export function parseRegistrationRole(value: string | null | undefined): Registr
   }
 
   return "practice_admin";
+}
+
+export function parseLoginRoleHint(value: string | null | undefined): LoginRoleHint | null {
+  if (value === "practice_admin" || value === "doctor_user" || value === "pharmacy_user") {
+    return value;
+  }
+
+  return null;
 }
 
 export function toAuthRole(role: RegistrationRole) {

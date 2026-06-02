@@ -15,11 +15,13 @@ type PracticeSetupWorkspaceProps = {
     latitude: number | null;
     longitude: number | null;
     pickupNotificationEmail: string | null;
+    pmsReturnEmail: string | null;
     trialStartsAt: string | null;
     trialEndsAt: string | null;
     pmsType: string;
     pmsSystemLabel: string | null;
     pmsApiBaseUrl: string | null;
+    pmsWritebackUrl: string | null;
     catalogSource: string;
     catalogProviderLabel: string | null;
     catalogApiBaseUrl: string | null;
@@ -59,12 +61,14 @@ export function PracticeSetupWorkspace(props: PracticeSetupWorkspaceProps) {
     latitude: props.practice.latitude?.toString() ?? "",
     longitude: props.practice.longitude?.toString() ?? "",
     pickupNotificationEmail: props.practice.pickupNotificationEmail ?? "",
+    pmsReturnEmail: props.practice.pmsReturnEmail ?? "",
     trialStartsAt: formatDateInput(props.practice.trialStartsAt),
     trialEndsAt: formatDateInput(props.practice.trialEndsAt),
     pmsType: props.practice.pmsType,
     pmsSystemLabel: props.practice.pmsSystemLabel ?? "",
     pmsApiBaseUrl: props.practice.pmsApiBaseUrl ?? "",
     pmsApiKey: "",
+    pmsWritebackUrl: props.practice.pmsWritebackUrl ?? "",
     catalogSource: props.practice.catalogSource,
     catalogProviderLabel: props.practice.catalogProviderLabel ?? "",
     catalogApiBaseUrl: props.practice.catalogApiBaseUrl ?? "",
@@ -233,6 +237,20 @@ export function PracticeSetupWorkspace(props: PracticeSetupWorkspaceProps) {
               />
             </label>
             <label className="field">
+              <span>Praxis-/MFA-E-Mail fuer PMS Rueckgabe</span>
+              <input
+                type="email"
+                value={formState.pmsReturnEmail}
+                onChange={(event) =>
+                  setFormState((current) => ({
+                    ...current,
+                    pmsReturnEmail: event.target.value,
+                  }))
+                }
+                placeholder="mfa@praxis.de"
+              />
+            </label>
+            <label className="field">
               <span>Kostenlose Nutzung von</span>
               <input
                 type="date"
@@ -296,6 +314,19 @@ export function PracticeSetupWorkspace(props: PracticeSetupWorkspaceProps) {
                     pmsApiBaseUrl: event.target.value,
                   }))
                 }
+              />
+            </label>
+            <label className="field">
+              <span>PMS Rueckgabe URL</span>
+              <input
+                value={formState.pmsWritebackUrl}
+                onChange={(event) =>
+                  setFormState((current) => ({
+                    ...current,
+                    pmsWritebackUrl: event.target.value,
+                  }))
+                }
+                placeholder="https://pms.example.de/api/prescriptions/writeback"
               />
             </label>
             <label className="field">

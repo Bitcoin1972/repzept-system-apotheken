@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, getRoleHomePath } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,7 @@ export default async function HomePage() {
   const user = await getCurrentUser();
 
   if (user) {
-    redirect(user.role === "PHARMACY_USER" ? "/pharmacy" : "/practice/new");
+    redirect(getRoleHomePath(user.role));
   }
 
   return (
@@ -24,11 +24,14 @@ export default async function HomePage() {
           </p>
         </div>
         <div className="hero-actions">
-          <Link href="/auth/login" className="secondary-link">
-            Anmelden
+          <Link href="/login?role=practice_admin" className="secondary-link">
+            Admin-Login
           </Link>
-          <Link href="/auth/register" className="primary-button">
-            Konto anlegen
+          <Link href="/login?role=doctor_user" className="secondary-link">
+            User-Login
+          </Link>
+          <Link href="/login?role=pharmacy_user" className="primary-button">
+            Apotheke-Login
           </Link>
         </div>
       </section>

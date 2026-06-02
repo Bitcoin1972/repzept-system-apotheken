@@ -134,12 +134,15 @@ model Practice {
   latitude             Float?
   longitude            Float?
   pickupNotificationEmail String?
+  pmsReturnEmail        String?
   trialStartsAt        DateTime?
   trialEndsAt          DateTime?
   pmsType              PmsType                     @default(GENERIC_PMS)
   pmsSystemLabel       String?
   pmsApiBaseUrl        String?
   pmsApiKeyMasked      String?
+  pmsApiKeySecret      String?
+  pmsWritebackUrl      String?
   catalogSource        CatalogSource               @default(PMS_CATALOG)
   catalogProviderLabel String?
   catalogApiBaseUrl    String?

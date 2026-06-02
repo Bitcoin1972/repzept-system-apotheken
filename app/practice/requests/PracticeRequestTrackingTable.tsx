@@ -153,6 +153,8 @@ export function PracticeRequestTrackingTable({ doctors }: TrackingTableProps) {
   const [sort, setSort] = useState("released_desc");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [returnState, setReturnState] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [returnMessage, setReturnMessage] = useState("");
 
   const deferredSearch = useDeferredValue(search);
 
@@ -185,6 +187,13 @@ export function PracticeRequestTrackingTable({ doctors }: TrackingTableProps) {
 
     return params.toString();
   }, [deferredSearch, distributionStatus, doctorId, page, releaseStatus, requestStatus, sort]);
+
+  const exportQueryString = useMemo(() => {
+    const params = new URLSearchParams(queryString);
+    params.delete("page");
+    params.delete("pageSize");
+    return params.toString();
+  }, [queryString]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -235,6 +244,52 @@ export function PracticeRequestTrackingTable({ doctors }: TrackingTableProps) {
     });
   }
 
+  async function triggerReturn(mode: "auto" | "email") {
+    setReturnState("running");
+    setReturnMessage("");
+
+    try {
+      const response = await fetch("/api/practice/requests/return", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          q: deferredSearch.trim(),
+          doctorId,
+          requestStatus,
+          releaseStatus,
+          distributionStatus,
+          sort,
+          mode,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Rueckgabe konnte nicht ausgefuehrt werden.");
+      }
+
+      if (mode === "email") {
+        setReturnMessage(`Rueckgabe-Mail vorbereitet: ${payload.rows} Datensaetze.`);
+      } else if (payload.pms?.status === "sent") {
+        setReturnMessage(`Rueckgabe ins PMS gesendet: ${payload.rows} Datensaetze.`);
+      } else if (payload.email?.status === "sent") {
+        setReturnMessage(`PMS nicht erreichbar, Rueckgabe-Mail gesendet: ${payload.rows} Datensaetze.`);
+      } else {
+        setReturnMessage(`Rueckgabe verarbeitet: ${payload.rows} Datensaetze.`);
+      }
+
+      setReturnState("done");
+    } catch (submitError) {
+      setReturnState("error");
+      setReturnMessage(
+        submitError instanceof Error ? submitError.message : "Rueckgabe konnte nicht ausgefuehrt werden.",
+      );
+    }
+  }
+
   return (
     <section className="composer-layout single-stack">
       <article className="panel">
@@ -243,10 +298,45 @@ export function PracticeRequestTrackingTable({ doctors }: TrackingTableProps) {
             <p className="eyebrow">Arzt-Nachverfolgung</p>
             <h2>Freigegebene Rezepte als kompakte Spaltenansicht</h2>
           </div>
-          <div className="context-chip">
-            {pagination.totalItems} Treffer · Seite {pagination.page}/{pagination.totalPages}
+          <div className="request-table-header-actions">
+            <a
+              href={`/api/practice/requests/export?${exportQueryString}&format=csv`}
+              className="secondary-link"
+            >
+              CSV fuer PMS
+            </a>
+            <a
+              href={`/api/practice/requests/export?${exportQueryString}&format=html`}
+              className="secondary-link"
+              target="_blank"
+              rel="noreferrer"
+            >
+              E-Mail-Tabelle
+            </a>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => void triggerReturn("auto")}
+              disabled={returnState === "running"}
+            >
+              Rueckgabe auto
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => void triggerReturn("email")}
+              disabled={returnState === "running"}
+            >
+              Praxis-Mail senden
+            </button>
+            <div className="context-chip">
+              {pagination.totalItems} Treffer · Seite {pagination.page}/{pagination.totalPages}
+            </div>
           </div>
         </div>
+        {returnMessage ? (
+          <div className={`status-text ${returnState === "error" ? "error" : ""}`}>{returnMessage}</div>
+        ) : null}
 
         <div className="request-table-toolbar">
           <label className="field request-search-field">

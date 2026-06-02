@@ -1,0 +1,4 @@
+ALTER TABLE "Practice"
+  ADD COLUMN IF NOT EXISTS "pmsReturnEmail" TEXT,
+  ADD COLUMN IF NOT EXISTS "pmsApiKeySecret" TEXT,
+  ADD COLUMN IF NOT EXISTS "pmsWritebackUrl" TEXT;

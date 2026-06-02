@@ -5,6 +5,7 @@ type PickupMailPayload = {
   to: string;
   subject: string;
   bodyText: string;
+  html?: string | null;
   replyTo?: string | null;
 };
 
@@ -32,6 +33,10 @@ function smtpConfigured() {
 }
 
 export async function sendPickupNotificationEmail(payload: PickupMailPayload): Promise<MailResult> {
+  return sendTransactionalEmail(payload);
+}
+
+export async function sendTransactionalEmail(payload: PickupMailPayload): Promise<MailResult> {
   if (!payload.to || !payload.from) {
     return {
       status: "skipped",
@@ -57,13 +62,16 @@ export async function sendPickupNotificationEmail(payload: PickupMailPayload): P
       },
     });
 
-    const result = await transporter.sendMail({
+    const mailOptions = {
       from: payload.from,
       to: payload.to,
       subject: payload.subject,
       text: payload.bodyText,
+      html: payload.html ?? undefined,
       replyTo: payload.replyTo ?? payload.from,
-    });
+    };
+
+    const result = await transporter.sendMail(mailOptions as never);
 
     return {
       status: "sent",

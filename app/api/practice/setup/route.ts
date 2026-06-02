@@ -55,6 +55,7 @@ export async function POST(request: Request) {
               : fallbackPractice.longitude,
           pickupNotificationEmail:
             body.pickupNotificationEmail ?? fallbackPractice.pickupNotificationEmail,
+          pmsReturnEmail: body.pmsReturnEmail ?? fallbackPractice.pmsReturnEmail,
           trialStartsAt:
             body.trialStartsAt !== undefined
               ? parseDate(body.trialStartsAt)
@@ -67,6 +68,8 @@ export async function POST(request: Request) {
           pmsSystemLabel: body.pmsSystemLabel ?? fallbackPractice.pmsSystemLabel,
           pmsApiBaseUrl: body.pmsApiBaseUrl ?? fallbackPractice.pmsApiBaseUrl,
           pmsApiKeyMasked: maskKey(body.pmsApiKey) ?? fallbackPractice.pmsApiKeyMasked,
+          pmsApiKeySecret: body.pmsApiKey || fallbackPractice.pmsApiKeySecret,
+          pmsWritebackUrl: body.pmsWritebackUrl ?? fallbackPractice.pmsWritebackUrl,
           catalogSource:
             (body.catalogSource as CatalogSource | undefined) ?? fallbackPractice.catalogSource,
           catalogProviderLabel:

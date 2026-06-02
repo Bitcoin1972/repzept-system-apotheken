@@ -185,6 +185,20 @@ button {
   border-color: rgba(31, 122, 90, 0.25);
 }
 
+.compact-role-grid {
+  margin-bottom: 1rem;
+}
+
+.role-choice-card {
+  width: 100%;
+  text-align: left;
+}
+
+.role-choice-card.active {
+  border-color: rgba(31, 122, 90, 0.4);
+  background: linear-gradient(180deg, rgba(31, 122, 90, 0.1), rgba(255, 250, 241, 0.94));
+}
+
 .composer-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.9fr);
@@ -212,6 +226,14 @@ button {
   gap: 1rem;
   align-items: flex-start;
   margin-bottom: 1rem;
+}
+
+.request-table-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .context-chip {
