@@ -8,8 +8,8 @@ import {
 
 import { resolveSwexProjectFromCatalog } from "@/lib/external-catalog";
 import {
-  createSwexOrder,
-  upsertSwexCustomer,
+  ingestSwexStripeOrder,
+  serializeCustomerAddress,
 } from "@/lib/integrations/swex";
 import { getStripeClient, mapStripeInvoiceStatus } from "@/lib/integrations/stripe";
 import { prisma } from "@/lib/prisma";
@@ -268,61 +268,6 @@ async function upsertCustomerAndOrder(input: {
     },
   });
 
-  const customerResult = await upsertSwexCustomer({
-    projectId: catalogEntry.projectId,
-    externalRef: existingCustomerLink?.externalRef ?? customerExternalRef,
-    customerName: input.stripeCustomer.name ?? link.displayName,
-    customerEmail: input.stripeCustomer.email ?? link.email,
-    phone: input.stripeCustomer.phone ?? link.phone,
-    company: link.company,
-    address: normalizeAddress(input.stripeCustomer.address),
-  });
-
-  const swexCustomerRef = String(
-    (customerResult as { customerRef?: string }).customerRef ?? existingCustomerLink?.swexCustomerRef ?? "",
-  );
-
-  const customerLink = await prisma.swexCustomerLink.upsert({
-    where: {
-      swexProjectId_stripeCustomerId: {
-        swexProjectId: catalogEntry.projectId,
-        stripeCustomerId: input.stripeCustomerId,
-      },
-    },
-    update: {
-      swexCustomerRef,
-      customerName: input.stripeCustomer.name ?? link.displayName,
-      customerEmail: input.stripeCustomer.email ?? link.email,
-      phone: input.stripeCustomer.phone ?? link.phone,
-      company: link.company,
-      address: normalizeAddress(input.stripeCustomer.address),
-      lastPayload: customerResult as Prisma.JsonObject,
-    },
-    create: {
-      entityType: link.entityType,
-      practiceId: link.practiceId,
-      pharmacyId: link.pharmacyId,
-      stripeCustomerId: input.stripeCustomerId,
-      swexProjectId: catalogEntry.projectId,
-      swexCustomerRef,
-      externalRef: existingCustomerLink?.externalRef ?? customerExternalRef,
-      customerName: input.stripeCustomer.name ?? link.displayName,
-      customerEmail: input.stripeCustomer.email ?? link.email,
-      phone: input.stripeCustomer.phone ?? link.phone,
-      company: link.company,
-      address: normalizeAddress(input.stripeCustomer.address),
-      lastPayload: customerResult as Prisma.JsonObject,
-    },
-  });
-
-  await persistEntityStripeRefs({
-    link,
-    stripeCustomerId: input.stripeCustomerId,
-    stripeSubscriptionId: input.stripeSubscriptionId,
-    swexCustomerRef,
-    subscriptionStatus: input.stripeSubscriptionId ? SubscriptionStatus.ACTIVE : null,
-  });
-
   const orderExternalRef =
     input.externalRefOverride ??
     input.stripeCheckoutSessionId ??
@@ -340,23 +285,79 @@ async function upsertCustomerAndOrder(input: {
   if (existingOrder) {
     return {
       status: "duplicate",
-      customerLink,
+      customerLink: existingCustomerLink,
       order: existingOrder,
     };
   }
 
-  const orderResult = await createSwexOrder({
+  const normalizedAddress = normalizeAddress(input.stripeCustomer.address);
+  const ingestResult = await ingestSwexStripeOrder({
     projectId: catalogEntry.projectId,
     externalRef: orderExternalRef,
-    customerRef: swexCustomerRef,
+    customerName: input.stripeCustomer.name ?? link.displayName,
     customerEmail: input.stripeCustomer.email ?? link.email,
+    customerPhone: input.stripeCustomer.phone ?? link.phone,
+    company: link.company,
+    customerAddress: serializeCustomerAddress(normalizedAddress),
     productName: input.productName,
     amountEur: toAmountEur(input.amountCents),
     currency: "EUR",
     billingCycle: input.billingCycle,
     paymentStatus: "paid",
     checkoutSessionId: input.stripeCheckoutSessionId ?? null,
-    subscriptionId: input.stripeSubscriptionId ?? null,
+    paymentReference:
+      input.stripeCheckoutSessionId ??
+      input.stripeInvoiceId ??
+      input.stripePaymentIntentId ??
+      input.stripeSubscriptionId ??
+      input.stripeEventId,
+  });
+
+  const swexCustomerRef = String(
+    (ingestResult as { customerRef?: string }).customerRef ??
+      existingCustomerLink?.swexCustomerRef ??
+      customerExternalRef,
+  );
+
+  const customerLink = await prisma.swexCustomerLink.upsert({
+    where: {
+      swexProjectId_stripeCustomerId: {
+        swexProjectId: catalogEntry.projectId,
+        stripeCustomerId: input.stripeCustomerId,
+      },
+    },
+    update: {
+      swexCustomerRef,
+      customerName: input.stripeCustomer.name ?? link.displayName,
+      customerEmail: input.stripeCustomer.email ?? link.email,
+      phone: input.stripeCustomer.phone ?? link.phone,
+      company: link.company,
+      address: normalizedAddress,
+      lastPayload: ingestResult as Prisma.JsonObject,
+    },
+    create: {
+      entityType: link.entityType,
+      practiceId: link.practiceId,
+      pharmacyId: link.pharmacyId,
+      stripeCustomerId: input.stripeCustomerId,
+      swexProjectId: catalogEntry.projectId,
+      swexCustomerRef,
+      externalRef: existingCustomerLink?.externalRef ?? customerExternalRef,
+      customerName: input.stripeCustomer.name ?? link.displayName,
+      customerEmail: input.stripeCustomer.email ?? link.email,
+      phone: input.stripeCustomer.phone ?? link.phone,
+      company: link.company,
+      address: normalizedAddress,
+      lastPayload: ingestResult as Prisma.JsonObject,
+    },
+  });
+
+  await persistEntityStripeRefs({
+    link,
+    stripeCustomerId: input.stripeCustomerId,
+    stripeSubscriptionId: input.stripeSubscriptionId,
+    swexCustomerRef,
+    subscriptionStatus: input.stripeSubscriptionId ? SubscriptionStatus.ACTIVE : null,
   });
 
   const order = await prisma.swexOrderSync.create({
@@ -367,7 +368,7 @@ async function upsertCustomerAndOrder(input: {
       pharmacyId: link.pharmacyId,
       swexProjectId: catalogEntry.projectId,
       swexCustomerRef,
-      swexSaleRef: String((orderResult as { saleRef?: string }).saleRef ?? "swex-sale-missing"),
+      swexSaleRef: String((ingestResult as { saleRef?: string }).saleRef ?? orderExternalRef),
       externalRef: orderExternalRef,
       stripeEventId: input.stripeEventId,
       stripeCheckoutSessionId: input.stripeCheckoutSessionId ?? null,
@@ -379,7 +380,7 @@ async function upsertCustomerAndOrder(input: {
       currency: "EUR",
       billingCycle: input.billingCycle,
       paymentStatus: "paid",
-      payload: orderResult as Prisma.JsonObject,
+      payload: ingestResult as Prisma.JsonObject,
     },
   });
 

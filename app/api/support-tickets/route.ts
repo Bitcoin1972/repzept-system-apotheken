@@ -105,6 +105,8 @@ export async function POST(request: Request) {
   const swexResult = await submitSupportTicketToSwex({
     ...swexPayload,
     customerRef: swexCustomerLink?.swexCustomerRef ?? null,
+    customerName: swexCustomerLink?.customerName ?? practice?.name ?? pharmacy?.name ?? null,
+    customerEmail: swexCustomerLink?.customerEmail ?? pharmacy?.billingEmail ?? pharmacy?.email ?? null,
   });
 
   const ticket = await prisma.supportTicket.create({

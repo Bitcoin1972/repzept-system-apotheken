@@ -21,19 +21,22 @@
   3. `SWEX_DEFAULT_PROJECT_ID`
 
 ## Verwendete SWEX Tower Endpunkte
-- Customer Upsert: `POST {SWEX_TOWER_BASE_URL}{SWEX_TOWER_CUSTOMERS_PATH}`
-- Order/Sale Upsert: `POST {SWEX_TOWER_BASE_URL}{SWEX_TOWER_ORDERS_PATH}`
-- Support Ticket: `POST {SWEX_TOWER_BASE_URL}{SWEX_TOWER_TICKETS_PATH}`
+- Stripe-/Checkout-Ingest: `POST {SWEX_TOWER_BASE_URL}{SWEX_STRIPE_INGEST_PATH}`
+- AI-/Support-Ingest: `POST {SWEX_TOWER_BASE_URL}{SWEX_SUPPORT_INGEST_PATH}`
 
 Standardpfade:
-- `/customers/upsert`
-- `/orders/upsert`
-- `/tickets`
+- `/api/ingest/stripe-order`
+- `/api/ingest/ai-support-ticket`
+
+Authentifizierung:
+- Stripe-/Checkout-Ingest nutzt `Authorization: Bearer {SWEX_STRIPE_INGEST_TOKEN}`
+- Support-Ingest nutzt `Authorization: Bearer {SWEX_SUPPORT_INGEST_TOKEN}`
+- Beide Payloads senden zusaetzlich `hubId`
 
 ## Duplikatvermeidung / Idempotenz
 - Jeder Stripe-Webhook wird in `StripeWebhookEvent` ueber `stripeEventId` einzigartig gespeichert.
 - Doppelte Webhook-Lieferungen werden dadurch sofort als `duplicate` erkannt.
-- SWEX-Customer werden eindeutig ueber `SwexCustomerLink(swexProjectId, stripeCustomerId)` gemappt.
+- Lokale SWEX-Customer-Links werden eindeutig ueber `SwexCustomerLink(swexProjectId, stripeCustomerId)` gemappt.
 - SWEX-Sales werden ueber `externalRef` und zusaetzlich ueber diese Stripe-IDs abgesichert:
   - `stripeCheckoutSessionId`
   - `stripeInvoiceId`
@@ -42,5 +45,5 @@ Standardpfade:
 
 ## Support-Fallback
 - Support-Tickets suchen zuerst einen vorhandenen `SwexCustomerLink`.
-- Wenn gefunden, wird dessen `swexCustomerRef` an das Tower-Ticket mitgegeben.
+- Wenn gefunden, wird dessen `swexCustomerRef` zusammen mit `customerName` und `customerEmail` an das Tower-Ticket mitgegeben.
 - Dadurch landet ein spaeterer Supportfall beim bereits synchronisierten Tower-Kunden statt als isoliertes Ticket.
