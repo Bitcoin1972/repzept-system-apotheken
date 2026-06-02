@@ -9,8 +9,10 @@ import { submitSupportTicketToSwex } from "@/lib/integrations/swex";
 import { prisma } from "@/lib/prisma";
 import {
   buildSanitizedSwexPayload,
+  buildExternalRef,
   buildTechnicalSignature,
   classifySupportComponent,
+  mapSeverityToPriority,
   normalizeSeverity,
 } from "@/lib/support";
 
@@ -44,6 +46,15 @@ export async function POST(request: Request) {
 
   const category = body.category ?? `${role.toLowerCase()}_${component.toLowerCase()}`;
   const technicalSignature = buildTechnicalSignature(component, body.message ?? "");
+  const projectId =
+    body.projectId ??
+    practice?.swexTenantRef ??
+    pharmacy?.swexTenantRef ??
+    "swex-default-project";
+  const language = body.language ?? "de";
+  const externalRef =
+    body.externalRef ??
+    buildExternalRef("support_ticket", body.requestId ?? body.connectionId ?? body.practiceId ?? body.pharmacyId);
 
   const swexPayload = buildSanitizedSwexPayload({
     role,
@@ -52,6 +63,10 @@ export async function POST(request: Request) {
     category,
     technicalSignature,
     createdAt,
+    message: body.message ?? "",
+    projectId,
+    externalRef,
+    language,
     refs: {
       practiceId: body.practiceId,
       pharmacyId: body.pharmacyId,
@@ -70,12 +85,15 @@ export async function POST(request: Request) {
       pharmacyId: body.pharmacyId ?? null,
       requestId: body.requestId ?? null,
       connectionId: body.connectionId ?? null,
+      swexProjectId: projectId,
+      externalRef,
+      language,
       role,
       component,
       severity,
       category,
       technicalSignature,
-      summary: swexPayload.summary,
+      summary: swexPayload.title,
       internalMessage: body.message ?? "",
       internalContext: {
         role,
@@ -85,6 +103,7 @@ export async function POST(request: Request) {
         pharmacyId: body.pharmacyId ?? null,
         connectionId: body.connectionId ?? null,
         requestId: body.requestId ?? null,
+        requestedPriority: mapSeverityToPriority(severity),
       },
       swexPayload,
       swexTicketRef: swexResult.ticketRef,

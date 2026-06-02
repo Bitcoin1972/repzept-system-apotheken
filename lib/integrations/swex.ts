@@ -6,6 +6,7 @@ export async function submitSupportTicketToSwex(payload: SanitizedSwexPayload) {
   return {
     ticketRef: `SWEX-${sequence}`,
     acceptedAt: new Date().toISOString(),
+    externalRef: payload.externalRef,
     payload,
   };
 }

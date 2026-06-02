@@ -1,10 +1,18 @@
+import { redirect } from "next/navigation";
+
 import { ensurePracticeContext } from "@/lib/bootstrap";
+import { getPracticeAccessState } from "@/lib/practice-access";
 import { prisma } from "@/lib/prisma";
 
 import { PharmacyWorkspace } from "./PharmacyWorkspace";
 
 export default async function PharmacyPage() {
-  await ensurePracticeContext();
+  const practice = await ensurePracticeContext();
+  const access = getPracticeAccessState(practice);
+
+  if (access.status !== "active") {
+    redirect("/billing/expired");
+  }
 
   const [practices, pharmacies] = await Promise.all([
     prisma.practice.findMany({
@@ -43,6 +51,11 @@ export default async function PharmacyPage() {
         id: pharmacy.id,
         name: pharmacy.name,
         email: pharmacy.email,
+        street: pharmacy.street,
+        city: pharmacy.city,
+        postalCode: pharmacy.postalCode,
+        latitude: pharmacy.latitude,
+        longitude: pharmacy.longitude,
         verificationCode: pharmacy.verificationCode,
         practiceConnections: pharmacy.practiceConnections.map((connection) => ({
           id: connection.id,

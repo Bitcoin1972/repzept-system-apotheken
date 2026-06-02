@@ -1,10 +1,17 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   PharmacyReleaseStatus,
   RequestDistributionStatus,
 } from "@prisma/client";
 
+import {
+  formatPharmacyReleaseStatus,
+  formatRecipeFlag,
+  formatRecipeFormType,
+  formatRequestDistributionStatus,
+} from "@/lib/labels";
+import { getPracticeAccessState } from "@/lib/practice-access";
 import { prisma } from "@/lib/prisma";
 
 type PageContext = {
@@ -68,6 +75,28 @@ export default async function PracticeRequestPage({ params }: PageContext) {
     notFound();
   }
 
+  const access = getPracticeAccessState(requestRecord.practice ?? {});
+
+  if (access.status !== "active") {
+    redirect("/billing/expired");
+  }
+
+  const formFlags =
+    requestRecord.clinicalPayload &&
+    typeof requestRecord.clinicalPayload === "object" &&
+    "recipeFormFlags" in requestRecord.clinicalPayload
+      ? (requestRecord.clinicalPayload.recipeFormFlags as Record<string, boolean>)
+      : {};
+  const enabledFlags = Object.entries(formFlags)
+    .filter(([, enabled]) => enabled)
+    .map(([key]) => formatRecipeFlag(key));
+  const pickupEmailPreview = requestRecord.responses.find(
+    (response) => response.kind === "pickup_email_preview",
+  );
+  const pickupEmailDelivery = requestRecord.responses.find(
+    (response) => response.kind === "pickup_email_delivery",
+  );
+
   return (
     <main className="workspace-shell">
       <section className="workspace-hero">
@@ -99,8 +128,12 @@ export default async function PracticeRequestPage({ params }: PageContext) {
             </div>
             <div className="stack-list">
               <div className="stack-item">
+                <strong>Rezeptformular</strong>
+                <span>{formatRecipeFormType(requestRecord.recipeFormType)}</span>
+              </div>
+              <div className="stack-item">
                 <strong>Freigabestatus</strong>
-                <span>{requestRecord.pharmacyReleaseStatus}</span>
+                <span>{formatPharmacyReleaseStatus(requestRecord.pharmacyReleaseStatus)}</span>
               </div>
               <div className="stack-item">
                 <strong>Normaler Weg offen</strong>
@@ -113,6 +146,14 @@ export default async function PracticeRequestPage({ params }: PageContext) {
               <div className="stack-item">
                 <strong>Rezepttext</strong>
                 <span>{requestRecord.outputText ?? requestRecord.transcription ?? "kein Output gespeichert"}</span>
+              </div>
+              <div className="stack-item">
+                <strong>Formular-Kennzeichen</strong>
+                <span>{enabledFlags.length > 0 ? enabledFlags.join(", ") : "keine gesetzt"}</span>
+              </div>
+              <div className="stack-item">
+                <strong>Patienten-E-Mail</strong>
+                <span>{requestRecord.patientEmail ?? "keine hinterlegt"}</span>
               </div>
             </div>
             {requestRecord.pharmacyReleaseStatus === PharmacyReleaseStatus.PRE_RELEASED ? (
@@ -134,7 +175,7 @@ export default async function PracticeRequestPage({ params }: PageContext) {
               {requestRecord.requestDistributions.map((distribution) => (
                 <div key={distribution.id} className="stack-item">
                   <strong>{distribution.pharmacy.name}</strong>
-                  <span>{distribution.status}</span>
+                  <span>{formatRequestDistributionStatus(distribution.status)}</span>
                   <span>Freigegeben: {formatDate(distribution.releasedAt)}</span>
                   {distribution.status === RequestDistributionStatus.BLOCKED_DUPLICATE ? (
                     <span>Doppelausgabe wurde nach bestaetigter Abgabe blockiert.</span>
@@ -165,6 +206,43 @@ export default async function PracticeRequestPage({ params }: PageContext) {
         </div>
 
         <aside className="composer-sidebar">
+          <article className="panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Abhol-Mail</p>
+                <h2>Patientenbenachrichtigung</h2>
+              </div>
+            </div>
+            {pickupEmailPreview ? (
+              <div className="stack-list">
+                <div className="stack-item">
+                  <strong>Absender</strong>
+                  <span>{String((pickupEmailPreview.payload as { from?: string }).from ?? "keine Praxis-E-Mail")}</span>
+                </div>
+                <div className="stack-item">
+                  <strong>Betreff</strong>
+                  <span>{String((pickupEmailPreview.payload as { subject?: string }).subject ?? "")}</span>
+                </div>
+                <div className="stack-item">
+                  <strong>Empfaenger</strong>
+                  <span>{String((pickupEmailPreview.payload as { to?: string }).to ?? "keine E-Mail")}</span>
+                </div>
+                <div className="stack-item">
+                  <strong>Inhalt</strong>
+                  <span>{String((pickupEmailPreview.payload as { bodyText?: string }).bodyText ?? "")}</span>
+                </div>
+                {pickupEmailDelivery ? (
+                  <div className="stack-item">
+                    <strong>Versandstatus</strong>
+                    <span>{JSON.stringify(pickupEmailDelivery.payload)}</span>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="muted-copy">Keine Abhol-Mail vorbereitet.</p>
+            )}
+          </article>
+
           <article className="panel">
             <div className="panel-header">
               <div>

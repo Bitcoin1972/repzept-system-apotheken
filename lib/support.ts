@@ -16,21 +16,12 @@ type SupportTenantRefs = {
 };
 
 export type SanitizedSwexPayload = {
-  reporterRole: "practice" | "pharmacy";
-  component: string;
-  severity: string;
-  category: string;
-  technicalSignature: string;
-  summary: string;
-  createdAt: string;
-  practiceRef?: string;
-  pharmacyRef?: string;
-  connectionRef?: string;
-  requestRef?: string;
-  stripeRefs?: {
-    practice?: string;
-    pharmacy?: string;
-  };
+  title: string;
+  description: string;
+  priority: "low" | "medium" | "high" | "urgent";
+  projectId: string;
+  externalRef: string;
+  language: string;
 };
 
 const SWEX_SALT = process.env.SWEX_PSEUDONYM_SALT ?? "swex-demo-salt";
@@ -92,6 +83,27 @@ export function normalizeSeverity(severity?: string | null) {
   }
 }
 
+export function mapSeverityToPriority(severity: SupportSeverity) {
+  switch (severity) {
+    case SupportSeverity.LOW:
+      return "low" as const;
+    case SupportSeverity.HIGH:
+      return "high" as const;
+    case SupportSeverity.CRITICAL:
+      return "urgent" as const;
+    default:
+      return "medium" as const;
+  }
+}
+
+export function buildExternalRef(scope: string, rawValue?: string | null) {
+  const suffix = rawValue
+    ? createHash("sha256").update(`${scope}:${rawValue}`).digest("hex").slice(0, 10)
+    : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+
+  return `${scope}_${suffix}`;
+}
+
 export function buildSanitizedSwexPayload(input: {
   role: SupportRole;
   component: SupportComponent;
@@ -99,31 +111,43 @@ export function buildSanitizedSwexPayload(input: {
   category: string;
   technicalSignature: string;
   createdAt: Date;
+  message: string;
+  projectId: string;
+  externalRef: string;
+  language: string;
   refs: SupportTenantRefs;
 }) {
   const reporterRole = input.role === SupportRole.PRACTICE ? "practice" : "pharmacy";
+  const descriptionParts = [
+    `role=${reporterRole}`,
+    `component=${input.component}`,
+    `category=${input.category}`,
+    `signature=${input.technicalSignature}`,
+    `createdAt=${input.createdAt.toISOString()}`,
+  ];
+
+  const practiceRef = pseudonymizeRef("practice", input.refs.practiceId);
+  const pharmacyRef = pseudonymizeRef("pharmacy", input.refs.pharmacyId);
+  const connectionRef = pseudonymizeRef("connection", input.refs.connectionId);
+  const requestRef = pseudonymizeRef("request", input.refs.requestId);
+  const practiceStripeRef = pseudonymizeRef("stripe_practice", input.refs.practiceStripeRef);
+  const pharmacyStripeRef = pseudonymizeRef("stripe_pharmacy", input.refs.pharmacyStripeRef);
+
+  if (practiceRef) descriptionParts.push(`practiceRef=${practiceRef}`);
+  if (pharmacyRef) descriptionParts.push(`pharmacyRef=${pharmacyRef}`);
+  if (connectionRef) descriptionParts.push(`connectionRef=${connectionRef}`);
+  if (requestRef) descriptionParts.push(`requestRef=${requestRef}`);
+  if (practiceStripeRef) descriptionParts.push(`practiceStripeRef=${practiceStripeRef}`);
+  if (pharmacyStripeRef) descriptionParts.push(`pharmacyStripeRef=${pharmacyStripeRef}`);
 
   const payload: SanitizedSwexPayload = {
-    reporterRole,
-    component: input.component,
-    severity: input.severity,
-    category: input.category,
-    technicalSignature: input.technicalSignature,
-    summary: `${reporterRole} reported ${input.component.toLowerCase().replaceAll("_", " ")}`,
-    createdAt: input.createdAt.toISOString(),
-    practiceRef: pseudonymizeRef("practice", input.refs.practiceId),
-    pharmacyRef: pseudonymizeRef("pharmacy", input.refs.pharmacyId),
-    connectionRef: pseudonymizeRef("connection", input.refs.connectionId),
-    requestRef: pseudonymizeRef("request", input.refs.requestId),
-    stripeRefs: {
-      practice: pseudonymizeRef("stripe_practice", input.refs.practiceStripeRef),
-      pharmacy: pseudonymizeRef("stripe_pharmacy", input.refs.pharmacyStripeRef),
-    },
+    title: `${reporterRole} ${input.component.toLowerCase().replaceAll("_", " ")} issue`,
+    description: descriptionParts.join(" | "),
+    priority: mapSeverityToPriority(input.severity),
+    projectId: input.projectId,
+    externalRef: input.externalRef,
+    language: input.language,
   };
-
-  if (!payload.stripeRefs?.practice && !payload.stripeRefs?.pharmacy) {
-    delete payload.stripeRefs;
-  }
 
   return payload;
 }

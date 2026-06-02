@@ -1,11 +1,20 @@
+import { redirect } from "next/navigation";
+
 import { describeCatalogStrategy } from "@/lib/integrations/catalog";
 import { buildRevenueSnapshot } from "@/lib/integrations/stripe";
 import { getPracticeDashboardContext } from "@/lib/bootstrap";
+import { getPracticeAccessState } from "@/lib/practice-access";
 
 import { PracticeComposer } from "./PracticeComposer";
 
 export default async function PracticeNewPage() {
   const context = await getPracticeDashboardContext();
+  const access = getPracticeAccessState(context.practice);
+
+  if (access.status !== "active") {
+    redirect("/billing/expired");
+  }
+
   const catalog = describeCatalogStrategy(context.practice);
   const revenue = buildRevenueSnapshot(context.practice);
 
@@ -14,9 +23,17 @@ export default async function PracticeNewPage() {
       practice={{
         id: context.practice.id,
         name: context.practice.name,
+        street: context.practice.street,
+        city: context.practice.city,
+        postalCode: context.practice.postalCode,
+        latitude: context.practice.latitude,
+        longitude: context.practice.longitude,
+        pickupNotificationEmail: context.practice.pickupNotificationEmail,
         pmsType: context.practice.pmsType,
         pmsSystemLabel: context.practice.pmsSystemLabel,
         catalogSource: context.practice.catalogSource,
+        catalogProviderLabel: context.practice.catalogProviderLabel,
+        catalogApiBaseUrl: context.practice.catalogApiBaseUrl,
         swexTenantRef: context.practice.swexTenantRef,
         stripeCustomerRef: context.practice.stripeCustomerRef,
       }}

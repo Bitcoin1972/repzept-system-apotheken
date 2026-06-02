@@ -1,6 +1,11 @@
 import { CatalogSource, type Practice } from "@prisma/client";
 
-export function describeCatalogStrategy(practice: Pick<Practice, "catalogSource" | "pmsSystemLabel">) {
+export function describeCatalogStrategy(
+  practice: Pick<
+    Practice,
+    "catalogSource" | "pmsSystemLabel" | "catalogProviderLabel" | "catalogApiBaseUrl"
+  >,
+) {
   if (practice.catalogSource === CatalogSource.PMS_CATALOG) {
     return {
       source: "PMS",
@@ -9,7 +14,9 @@ export function describeCatalogStrategy(practice: Pick<Practice, "catalogSource"
   }
 
   return {
-    source: "External API",
-    description: "Externer Arzneimittelkatalog als Fallback, wenn das PMS keinen eigenen Katalog liefert.",
+    source: practice.catalogProviderLabel ?? "External API",
+    description: `${
+      practice.catalogApiBaseUrl ?? "Externer Arzneimittelkatalog"
+    } ist als getrennte Quelle hinterlegt, wenn das PMS keinen eigenen Katalog liefert.`,
   };
 }

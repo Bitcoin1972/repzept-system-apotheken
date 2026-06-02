@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import {
+  formatPharmacyReleaseStatus,
+  formatRequestDistributionStatus,
+  formatVerificationStatus,
+} from "@/lib/labels";
+
 type PharmacyWorkspaceProps = {
   practices: Array<{
     id: string;
@@ -12,6 +18,11 @@ type PharmacyWorkspaceProps = {
     id: string;
     name: string;
     email: string | null;
+    street: string | null;
+    city: string | null;
+    postalCode: string | null;
+    latitude: number | null;
+    longitude: number | null;
     verificationCode: string;
     practiceConnections: Array<{
       id: string;
@@ -50,7 +61,15 @@ export function PharmacyWorkspace(props: PharmacyWorkspaceProps) {
   const [selectedPracticeId, setSelectedPracticeId] = useState(props.practices[0]?.id ?? "");
   const [verificationCode, setVerificationCode] = useState("");
   const [connectionState, setConnectionState] = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [pharmacyForm, setPharmacyForm] = useState({ name: "", email: "" });
+  const [pharmacyForm, setPharmacyForm] = useState({
+    name: "",
+    email: "",
+    street: "",
+    city: "",
+    postalCode: "",
+    latitude: "",
+    longitude: "",
+  });
   const [createState, setCreateState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [supportMessage, setSupportMessage] = useState("");
   const [supportState, setSupportState] = useState<"idle" | "loading" | "done" | "error">("idle");
@@ -100,7 +119,15 @@ export function PharmacyWorkspace(props: PharmacyWorkspaceProps) {
       setPharmacies((current) => [...current, createdPharmacy]);
       setSelectedPharmacyId(createdPharmacy.id);
       setCreateState("done");
-      setPharmacyForm({ name: "", email: "" });
+      setPharmacyForm({
+        name: "",
+        email: "",
+        street: "",
+        city: "",
+        postalCode: "",
+        latitude: "",
+        longitude: "",
+      });
     } catch {
       setCreateState("error");
     }
@@ -280,6 +307,66 @@ export function PharmacyWorkspace(props: PharmacyWorkspaceProps) {
                   }
                 />
               </label>
+              <label className="field">
+                <span>Strasse</span>
+                <input
+                  value={pharmacyForm.street}
+                  onChange={(event) =>
+                    setPharmacyForm((current) => ({
+                      ...current,
+                      street: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>PLZ</span>
+                <input
+                  value={pharmacyForm.postalCode}
+                  onChange={(event) =>
+                    setPharmacyForm((current) => ({
+                      ...current,
+                      postalCode: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Ort</span>
+                <input
+                  value={pharmacyForm.city}
+                  onChange={(event) =>
+                    setPharmacyForm((current) => ({
+                      ...current,
+                      city: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Breitengrad</span>
+                <input
+                  value={pharmacyForm.latitude}
+                  onChange={(event) =>
+                    setPharmacyForm((current) => ({
+                      ...current,
+                      latitude: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Laengengrad</span>
+                <input
+                  value={pharmacyForm.longitude}
+                  onChange={(event) =>
+                    setPharmacyForm((current) => ({
+                      ...current,
+                      longitude: event.target.value,
+                    }))
+                  }
+                />
+              </label>
             </div>
             <div className="action-row">
               <button type="button" className="secondary-button" onClick={createPharmacyAccount}>
@@ -287,7 +374,12 @@ export function PharmacyWorkspace(props: PharmacyWorkspaceProps) {
               </button>
               {createState === "done" ? <span className="status-text">Apotheke angelegt.</span> : null}
               {selectedPharmacy ? (
-                <span className="context-chip">Code: {selectedPharmacy.verificationCode}</span>
+                <span className="context-chip">
+                  Code: {selectedPharmacy.verificationCode}
+                  {selectedPharmacy.street || selectedPharmacy.city
+                    ? ` · ${[selectedPharmacy.street, selectedPharmacy.city].filter(Boolean).join(", ")}`
+                    : ""}
+                </span>
               ) : null}
             </div>
           </article>
@@ -358,9 +450,10 @@ export function PharmacyWorkspace(props: PharmacyWorkspaceProps) {
                       {item.request.medicationPzn ? ` · PZN ${item.request.medicationPzn}` : ""}
                     </span>
                     <div className="release-banner warning">
-                      Bereits freigegeben. Normaler Weg folgt noch:{" "}
+                      {formatPharmacyReleaseStatus(item.request.pharmacyReleaseStatus)}. Normaler Weg folgt noch:{" "}
                       {item.request.normalFlowPending ? "ja, nicht doppelt ausgeben." : "nein"}.
                     </div>
+                    <span>Status: {formatRequestDistributionStatus(item.status)}</span>
                     <div className="action-row">
                       <button
                         type="button"
@@ -406,7 +499,7 @@ export function PharmacyWorkspace(props: PharmacyWorkspaceProps) {
                 selectedPharmacy.practiceConnections.map((connection) => (
                   <div key={connection.id} className="stack-item">
                     <strong>{connection.practiceName}</strong>
-                    <span>{connection.verificationStatus}</span>
+                    <span>{formatVerificationStatus(connection.verificationStatus)}</span>
                   </div>
                 ))
               )}

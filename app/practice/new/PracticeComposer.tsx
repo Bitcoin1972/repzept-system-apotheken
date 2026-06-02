@@ -3,13 +3,28 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import {
+  formatRecipeFlag,
+  formatRecipeFormType,
+  formatRequestStatus,
+  formatVerificationStatus,
+} from "@/lib/labels";
+
 type PracticeComposerProps = {
   practice: {
     id: string;
     name: string;
+    street: string | null;
+    city: string | null;
+    postalCode: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    pickupNotificationEmail: string | null;
     pmsType: string;
     pmsSystemLabel: string | null;
     catalogSource: string;
+    catalogProviderLabel: string | null;
+    catalogApiBaseUrl: string | null;
     swexTenantRef: string | null;
     stripeCustomerRef: string | null;
   };
@@ -46,15 +61,32 @@ type PracticeComposerProps = {
   supportCount: number;
 };
 
+type RecipeFormType = "GKV_MUSTER16" | "GREEN" | "PRIVATE" | "BTM" | "T_REZEPT";
+
 const defaultMedication = {
   medicationName: "",
   medicationStrength: "",
   medicationPzn: "",
 };
 
+const defaultRecipeFlags = {
+  autIdem: false,
+  noctu: false,
+  accident: false,
+  bvg: false,
+  coPaymentExempt: false,
+  tInLabel: false,
+  tOffLabel: false,
+  tInfoMaterial: false,
+  tSafetyConfirmed: false,
+};
+
 export function PracticeComposer(props: PracticeComposerProps) {
   const [inputLanguage, setInputLanguage] = useState("Deutsch");
   const [outputText, setOutputText] = useState("");
+  const [patientEmail, setPatientEmail] = useState("");
+  const [recipeFormType, setRecipeFormType] = useState<RecipeFormType>("GKV_MUSTER16");
+  const [recipeFlags, setRecipeFlags] = useState(defaultRecipeFlags);
   const [medication, setMedication] = useState(defaultMedication);
   const [medicationDraft, setMedicationDraft] = useState(defaultMedication);
   const [showMedicationPicker, setShowMedicationPicker] = useState(false);
@@ -71,10 +103,39 @@ export function PracticeComposer(props: PracticeComposerProps) {
   const medicationLine = medication.medicationName
     ? `Medikation: ${medication.medicationName}${medication.medicationStrength ? `, ${medication.medicationStrength}` : ""}${medication.medicationPzn ? `, PZN ${medication.medicationPzn}` : ""}`
     : "Medikation: wird auswaehlbar im Extrafenster gepflegt";
+
+  const activeFormHints =
+    recipeFormType === "GKV_MUSTER16"
+      ? ["Aut idem", "Noctu", "Unfall", "BVG", "Zuzahlungsbefreit"]
+      : recipeFormType === "T_REZEPT"
+        ? ["In-Label", "Off-Label", "Informationsmaterial", "Sicherheitsbestaetigung"]
+        : recipeFormType === "GREEN"
+          ? ["Empfehlungsrezept ohne GKV-Abrechnungskaestchen"]
+          : recipeFormType === "PRIVATE"
+            ? ["Privatabrechnung, keine GKV-Kaestchen"]
+            : ["BtM-Sonderlogik spaeter erweiterbar"];
+
+  const flagSummary = Object.entries(recipeFlags)
+    .filter(([, enabled]) => enabled)
+    .map(([key]) => formatRecipeFlag(key))
+    .join(", ");
+
   const recipePreview =
     lines.length === 0
       ? "Noch keine Vorschau vorhanden. Der finale Rezepttext wird aus dem Output erstellt."
-      : [lines.slice(0, 3).join(" "), medicationLine].join("\n");
+      : [
+          `Formular: ${formatRecipeFormType(recipeFormType)}`,
+          lines.slice(0, 3).join(" "),
+          medicationLine,
+          flagSummary ? `Kennzeichen: ${flagSummary}` : "Kennzeichen: keine Zusatzfelder markiert",
+        ].join("\n");
+
+  function updateFlag(flag: keyof typeof defaultRecipeFlags, checked: boolean) {
+    setRecipeFlags((current) => ({
+      ...current,
+      [flag]: checked,
+    }));
+  }
 
   async function releasePrescription() {
     setReleaseState("loading");
@@ -89,11 +150,14 @@ export function PracticeComposer(props: PracticeComposerProps) {
           practiceId: props.practice.id,
           releasedByDoctorId: props.activeDoctor?.id ?? null,
           doctorName: props.activeDoctor?.name ?? props.practice.name,
+          patientEmail,
           inputLanguage,
           outputText,
           transcription: outputText,
           summary: recipePreview,
           recipePreview,
+          recipeFormType,
+          recipeFormFlags: recipeFlags,
           medicationSource:
             props.practice.catalogSource === "PMS_CATALOG" ? "PMS_CATALOG" : "EXTERNAL_API",
           ...medication,
@@ -108,6 +172,7 @@ export function PracticeComposer(props: PracticeComposerProps) {
       setReleasedRequestId(payload.id);
       setReleaseState("done");
       setOutputText("");
+      setPatientEmail("");
     } catch {
       setReleaseState("error");
     }
@@ -201,12 +266,128 @@ export function PracticeComposer(props: PracticeComposerProps) {
 
             <div className="field-grid single-column">
               <label className="field">
+                <span>Rezeptformular</span>
+                <select
+                  value={recipeFormType}
+                  onChange={(event) => setRecipeFormType(event.target.value as RecipeFormType)}
+                >
+                  <option value="GKV_MUSTER16">Rosa / GKV Muster 16</option>
+                  <option value="GREEN">Gruenes Rezept</option>
+                  <option value="PRIVATE">Privatrezept</option>
+                  <option value="BTM">BtM-Rezept</option>
+                  <option value="T_REZEPT">T-Rezept</option>
+                </select>
+              </label>
+
+              <div className="preview-card">
+                <div className="preview-header">
+                  <div>
+                    <span className="eyebrow">Pflichtfelder nach Formular</span>
+                    <h3>Auswahlhilfe</h3>
+                  </div>
+                </div>
+                <pre>{activeFormHints.join(" · ")}</pre>
+              </div>
+
+              {recipeFormType === "GKV_MUSTER16" ? (
+                <div className="checkbox-grid">
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={recipeFlags.autIdem}
+                      onChange={(event) => updateFlag("autIdem", event.target.checked)}
+                    />
+                    <span>Aut idem ausschliessen</span>
+                  </label>
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={recipeFlags.noctu}
+                      onChange={(event) => updateFlag("noctu", event.target.checked)}
+                    />
+                    <span>Noctu</span>
+                  </label>
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={recipeFlags.accident}
+                      onChange={(event) => updateFlag("accident", event.target.checked)}
+                    />
+                    <span>Unfallkennzeichen</span>
+                  </label>
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={recipeFlags.bvg}
+                      onChange={(event) => updateFlag("bvg", event.target.checked)}
+                    />
+                    <span>BVG</span>
+                  </label>
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={recipeFlags.coPaymentExempt}
+                      onChange={(event) => updateFlag("coPaymentExempt", event.target.checked)}
+                    />
+                    <span>Zuzahlungsbefreit</span>
+                  </label>
+                </div>
+              ) : null}
+
+              {recipeFormType === "T_REZEPT" ? (
+                <div className="checkbox-grid">
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={recipeFlags.tInLabel}
+                      onChange={(event) => updateFlag("tInLabel", event.target.checked)}
+                    />
+                    <span>In-Label</span>
+                  </label>
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={recipeFlags.tOffLabel}
+                      onChange={(event) => updateFlag("tOffLabel", event.target.checked)}
+                    />
+                    <span>Off-Label</span>
+                  </label>
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={recipeFlags.tInfoMaterial}
+                      onChange={(event) => updateFlag("tInfoMaterial", event.target.checked)}
+                    />
+                    <span>Informationsmaterial ausgehaendigt</span>
+                  </label>
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={recipeFlags.tSafetyConfirmed}
+                      onChange={(event) => updateFlag("tSafetyConfirmed", event.target.checked)}
+                    />
+                    <span>Sicherheitsbestimmungen bestaetigt</span>
+                  </label>
+                </div>
+              ) : null}
+
+              <label className="field">
                 <span>Eingabe Sprache</span>
                 <select value={inputLanguage} onChange={(event) => setInputLanguage(event.target.value)}>
                   <option>Deutsch</option>
                   <option>Englisch</option>
                   <option>Tuerkisch</option>
                 </select>
+              </label>
+
+              <label className="field">
+                <span>Patienten-E-Mail fuer Abholhinweis</span>
+                <input
+                  type="email"
+                  placeholder="kunde@example.de"
+                  value={patientEmail}
+                  onChange={(event) => setPatientEmail(event.target.value)}
+                />
               </label>
 
               <label className="field">
@@ -240,6 +421,13 @@ export function PracticeComposer(props: PracticeComposerProps) {
                 <div className="release-banner">
                   Die verbundene Apotheke sieht sofort, dass dieses Rezept bereits freigegeben ist.
                   Der normale Weg bleibt bis zur bestaetigten Abgabe als offen markiert.
+                  {patientEmail
+                    ? ` Fuer den Kunden wird zusaetzlich eine Abhol-E-Mail nach Entfernung sortiert vorbereitet${
+                        props.practice.pickupNotificationEmail
+                          ? ` und von ${props.practice.pickupNotificationEmail} versendet`
+                          : ""
+                      }.`
+                    : ""}
                 </div>
               </div>
             </div>
@@ -330,7 +518,7 @@ export function PracticeComposer(props: PracticeComposerProps) {
               {props.pharmacies.map((pharmacy) => (
                 <div key={pharmacy.id} className="stack-item">
                   <strong>{pharmacy.pharmacyName}</strong>
-                  <span>{pharmacy.verificationStatus}</span>
+                  <span>{formatVerificationStatus(pharmacy.verificationStatus)}</span>
                   <span>Code: {pharmacy.verificationCode}</span>
                 </div>
               ))}
@@ -351,7 +539,7 @@ export function PracticeComposer(props: PracticeComposerProps) {
                 props.recentRequests.map((request) => (
                   <Link key={request.id} href={`/practice/requests/${request.id}`} className="stack-item link-card">
                     <strong>{request.summary ?? "Rezept ohne Zusammenfassung"}</strong>
-                    <span>{request.status}</span>
+                    <span>{formatRequestStatus(request.status)}</span>
                     <span>{request.pharmacies.join(", ") || "Noch keine Apotheke erreicht"}</span>
                   </Link>
                 ))

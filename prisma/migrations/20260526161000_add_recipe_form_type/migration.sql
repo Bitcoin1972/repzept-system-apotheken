@@ -1,0 +1,9 @@
+DO $$
+BEGIN
+  CREATE TYPE "RecipeFormType" AS ENUM ('GKV_MUSTER16', 'GREEN', 'PRIVATE', 'BTM', 'T_REZEPT');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+ALTER TABLE "Request"
+  ADD COLUMN IF NOT EXISTS "recipeFormType" "RecipeFormType" NOT NULL DEFAULT 'GKV_MUSTER16';

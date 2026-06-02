@@ -1,0 +1,7 @@
+ALTER TABLE "Practice"
+  ADD COLUMN IF NOT EXISTS "trialStartsAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "trialEndsAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "stripeCheckoutUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "renderWorkspaceSlug" TEXT,
+  ADD COLUMN IF NOT EXISTS "renderServiceName" TEXT,
+  ADD COLUMN IF NOT EXISTS "copyToOwnRenderOnActivation" BOOLEAN NOT NULL DEFAULT false;

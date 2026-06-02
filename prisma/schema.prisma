@@ -39,6 +39,14 @@ enum MedicationSource {
   EXTERNAL_API
 }
 
+enum RecipeFormType {
+  GKV_MUSTER16
+  GREEN
+  PRIVATE
+  BTM
+  T_REZEPT
+}
+
 enum CatalogSource {
   PMS_CATALOG
   EXTERNAL_API
@@ -88,20 +96,36 @@ enum SupportSeverity {
 model Practice {
   id                   String                      @id @default(cuid())
   name                 String
+  street               String?
+  city                 String?
+  postalCode           String?
+  latitude             Float?
+  longitude            Float?
+  pickupNotificationEmail String?
+  trialStartsAt        DateTime?
+  trialEndsAt          DateTime?
   pmsType              PmsType                     @default(GENERIC_PMS)
   pmsSystemLabel       String?
   pmsApiBaseUrl        String?
   pmsApiKeyMasked      String?
   catalogSource        CatalogSource               @default(PMS_CATALOG)
+  catalogProviderLabel String?
+  catalogApiBaseUrl    String?
+  catalogApiKeyMasked  String?
   stripeCustomerRef    String?
   stripeSubscriptionRef String?
+  stripeCheckoutUrl    String?
   swexTenantRef        String?
+  renderWorkspaceSlug  String?
+  renderServiceName    String?
+  copyToOwnRenderOnActivation Boolean              @default(false)
   createdAt            DateTime                    @default(now())
   updatedAt            DateTime                    @updatedAt
   doctors              DoctorUser[]
   requests             Request[]
   pharmacyConnections  PracticePharmacyConnection[]
   supportTickets       SupportTicket[]
+  stripePayments       StripePaymentRecord[]
 }
 
 model DoctorUser {
@@ -120,6 +144,11 @@ model PharmacyAccount {
   name               String
   email              String?
   contactPhone       String?
+  street             String?
+  city               String?
+  postalCode         String?
+  latitude           Float?
+  longitude          Float?
   verificationCode   String                      @unique
   stripeCustomerRef  String?
   swexTenantRef      String?
@@ -129,6 +158,7 @@ model PharmacyAccount {
   requestDistributions RequestDistribution[]
   dispenseLogs       DispenseLog[]
   supportTickets     SupportTicket[]
+  stripePayments     StripePaymentRecord[]
 }
 
 model PracticePharmacyConnection {
@@ -156,7 +186,9 @@ model Request {
   doctorName            String
   insuranceProvider     String?
   patientReference      String?
+  patientEmail          String?
   prescriptionType      PrescriptionType      @default(ACUTE)
+  recipeFormType        RecipeFormType        @default(GKV_MUSTER16)
   status                RequestStatus         @default(APPROVED)
   signatureStatus       SignatureStatus       @default(SIGNED)
   pharmacyReleaseStatus PharmacyReleaseStatus @default(NOT_RELEASED)
@@ -230,6 +262,9 @@ model SupportTicket {
   pharmacyId         String?
   requestId          String?
   connectionId       String?
+  swexProjectId      String
+  externalRef        String                    @unique
+  language           String                    @default("de")
   role               SupportRole
   component          SupportComponent
   severity           SupportSeverity          @default(MEDIUM)
@@ -246,4 +281,24 @@ model SupportTicket {
   pharmacy           PharmacyAccount?         @relation(fields: [pharmacyId], references: [id], onDelete: SetNull)
   request            Request?                 @relation(fields: [requestId], references: [id], onDelete: SetNull)
   connection         PracticePharmacyConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+}
+
+model StripePaymentRecord {
+  id                    String           @id @default(cuid())
+  practiceId            String?
+  pharmacyId            String?
+  stripeCustomerId      String?
+  stripePaymentIntentId String           @unique
+  stripeInvoiceId       String?
+  customerName          String?
+  amount                Int
+  currency              String
+  status                String
+  description           String?
+  paidAt                DateTime?
+  failedAt              DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  practice              Practice?        @relation(fields: [practiceId], references: [id], onDelete: SetNull)
+  pharmacy              PharmacyAccount? @relation(fields: [pharmacyId], references: [id], onDelete: SetNull)
 }

@@ -33,6 +33,12 @@ export async function POST(request: Request) {
       name: body.name ?? "Neue Apotheke",
       email: body.email ?? null,
       contactPhone: body.contactPhone ?? null,
+      street: body.street ?? null,
+      city: body.city ?? null,
+      postalCode: body.postalCode ?? null,
+      latitude: body.latitude !== undefined && body.latitude !== "" ? Number(body.latitude) : null,
+      longitude:
+        body.longitude !== undefined && body.longitude !== "" ? Number(body.longitude) : null,
       stripeCustomerRef: body.stripeCustomerRef ?? null,
       swexTenantRef: body.swexTenantRef ?? null,
       verificationCode: buildVerificationCode(body.name ?? "Neue Apotheke"),
